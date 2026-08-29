@@ -15,8 +15,8 @@ Update this file as you go. It is the "where were we" note for a fresh session.
 - [x] Detection loop running (COCO-SSD + IoU tracker + 0.75s trajectory prediction, verified with node logic tests)
 - [x] Zone geometry + rule engine (zone_intrusion, occupancy, obstruction, proximity) with manual click-drag zone drawing UI as a stand-in for voice input
 - [x] First LLM round trip from the app (app.js -> llm.js chatCompletion(), verified against a fake local server; needs Manasa's real llama-server to fully confirm)
-- [ ] Speech/typed rule → JSON rules
-- [ ] Spoken warning fires before a crossing
+- [x] Speech/typed rule → JSON rules (compileRules() placeholder in llm.js, verified against a fake server; Manasa to refine prompt/model)
+- [x] Spoken warning fires before a crossing (speechSynthesis hooked into showAlert; predicted-position warn already fires before actual crossing per Task 5)
 - [ ] Event log persists across reload
 - [ ] Mesh relay + second phone console
 - [ ] Shift report generated on-device
