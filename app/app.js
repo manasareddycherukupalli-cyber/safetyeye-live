@@ -112,6 +112,10 @@ document.getElementById('zoneCancelBtn').addEventListener('click', () => {
 // --- Task 7: speech/typed rule -> compiled JSON rule -> zone appears -> spoken warning.
 const ruleInput = document.getElementById('ruleInput');
 const ruleJsonPreview = document.getElementById('ruleJsonPreview');
+ruleJsonPreview.addEventListener('click', () => {
+  clearTimeout(ruleJsonPreview._hide);
+  ruleJsonPreview.style.display = 'none';
+});
 
 // If the LLM names a zone that hasn't been drawn yet, place a reasonable
 // default rectangle so the zone appears immediately (matches the demo: "say
@@ -139,6 +143,10 @@ async function submitRuleText(text) {
     }
     ruleJsonPreview.textContent = JSON.stringify({ rules }, null, 2);
     ruleJsonPreview.style.display = 'block';
+    // It covers the camera, which is the thing we are demonstrating. Show it long
+    // enough to read and photograph, then get out of the way. Tap dismisses sooner.
+    clearTimeout(ruleJsonPreview._hide);
+    ruleJsonPreview._hide = setTimeout(() => { ruleJsonPreview.style.display = 'none'; }, 12000);
     ruleInput.value = '';
     setStatus('running');
   } catch (err) {

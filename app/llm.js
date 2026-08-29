@@ -103,8 +103,11 @@ const LLM = (() => {
           'obstruction (something blocking a zone), proximity (person near person or object).\n' +
           'limit is the count that trips the rule; use 1 unless a number is stated.\n' +
           'severity is critical when injury is plausible, otherwise warn.\n' +
-          'say is the sentence spoken aloud to the worker BEFORE they cross: ' +
-          'under eight words, an instruction not a description, e.g. "Step back from the press".'
+          'say is the sentence spoken aloud to the worker BEFORE they cross. ' +
+          'Under eight words. A direct instruction to one person, not a description ' +
+          'and not a policy. Never mention the limit, a count, or the rule type. ' +
+          'Good: "Step back from the press." "Clear the fire exit." ' +
+          'Bad: "Keep 1 person away from the press." "Occupancy limit reached."'
       },
       { role: 'user', content: spoken }
     ], { schema: RULE_SCHEMA, maxTokens: 320, ...opts });
