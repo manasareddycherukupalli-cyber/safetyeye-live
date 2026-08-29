@@ -9,10 +9,10 @@ Update this file as you go. It is the "where were we" note for a fresh session.
 - [ ] llama.cpp built on the phone
 - [ ] Qwen 3B + 1.5B GGUF downloaded to the phone
 - [ ] `llama-server` answers `curl` on 127.0.0.1:8080
-- [ ] tfjs + coco-ssd weights vendored into `vendor/`
-- [ ] App shell served by `llama-server --path ./app`
-- [ ] Camera feed rendering on the phone
-- [ ] Detection loop running
+- [x] tfjs + coco-ssd weights vendored into `vendor/` (verified: all local, 0 CDN calls)
+- [ ] App shell served by `llama-server --path ./app` (shell built, awaiting Manasa's llama-server)
+- [ ] Camera feed rendering on the phone (code written, untestable on laptop — no working laptop camera)
+- [ ] Detection loop running (basic version wired into app.js — no tracker/prediction yet, that's separate)
 - [ ] First LLM round trip from the app
 - [ ] Speech/typed rule → JSON rules
 - [ ] Spoken warning fires before a crossing
@@ -33,7 +33,9 @@ Update this file as you go. It is the "where were we" note for a fresh session.
 
 ## Blockers
 
-_(write them here so a new session sees them immediately)_
+- Surendra's laptop camera is not working — can't visually test getUserMedia locally.
+  Not a real blocker: the phone camera is the actual target device. First live camera
+  test happens on the phone at 14:00 RED window instead.
 
 ## Decisions made
 
