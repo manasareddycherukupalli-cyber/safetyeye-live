@@ -242,6 +242,8 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;
   object-fit:cover;display:block}
 #overlay{z-index:5;touch-action:none}
 #synth{z-index:1}
+/* the front camera is shown the way a mirror behaves; see isMirrored() */
+#feed.mirror{transform:scaleX(-1)}
 
 .hud{position:absolute;inset:0;z-index:10;pointer-events:none;
   display:flex;flex-direction:column;justify-content:space-between;padding:11px}
@@ -850,6 +852,8 @@ const App = (() => {
   const WARN_COOLDOWN=4500;  // don't nag
   const PREDICT=45;          // frames ahead (~0.75s) to project a person's path
   const NEAR=.28;            // only warn once someone is this close to the zone
+  const CLOSE=.12;           // this close to the line warns on its own, moving or not
+  const NEAR_AGE=6;          // ~0.5s of tracking before a standing person counts
   const GRACE=4000;          // a warning followed by a breach inside this = not prevented
 
   const $ = id => document.getElementById(id);
@@ -876,7 +880,7 @@ const App = (() => {
   };
   // A warning is not a violation — it is the system trying to stop one.
   const WARN={label:"Warning called out", color:"#FFB84D", icon:ICON.warn,
-              say:"Careful. You are close to the danger zone."};
+              say:"Restricted area. You are not allowed."};
   const svg=(p,c)=>`<svg viewBox="0 0 24 24" style="stroke:${c}">${p}</svg>`;
   // the site name is typed by the user and gets written into the report HTML
   const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>
@@ -1003,8 +1007,14 @@ const App = (() => {
       o.start();o.stop(actx.currentTime+.28);
     }catch(e){}
   }
-  function say(t){
+  // delay lets an alert chirp first and speak second, without the words being
+  // buried under it. A later alert clears a pending one, so the speaker never
+  // announces a warning after the breach it failed to prevent.
+  let sayTimer=null;
+  function say(t,delay){
+    clearTimeout(sayTimer);
     if(!S.speak||!("speechSynthesis" in window)) return;
+    if(delay){ sayTimer=setTimeout(()=>say(t),delay); return; }
     try{
       speechSynthesis.cancel();
       const u=new SpeechSynthesisUtterance(t);
@@ -1055,11 +1065,19 @@ const App = (() => {
         video:{facingMode:{ideal:facing},width:{ideal:960}},audio:false});
     }
   }
+  // The front camera looks back at whoever is holding the phone, so its raw frame
+  // is reversed: step to your right and the un-mirrored picture shows you sliding
+  // left. Every phone camera app flips that preview, and people read it as a
+  // mirror, so we do the same — and then flip everything measured off it, or the
+  // box, the zone test and the forward projection would chase the wrong way.
+  function isMirrored(){ return S.cameraFacing==="user"; }
+  function syncMirror(){ feed.classList.toggle("mirror",isMirrored()); }
   function attachCamera(st,facing){
     const actual=st.getVideoTracks()[0]?.getSettings?.().facingMode;
     S.cameraFacing=(actual==="user"||actual==="environment")?actual:facing;
     S.stream=st; feed.srcObject=st;
     feed.style.display="block"; synth.style.display="none";
+    syncMirror();
     syncCameraButton();
     feed.play().catch(()=>{});
   }
@@ -1233,8 +1251,10 @@ const App = (() => {
       try{
         const raw=await S.model.detect(feed,12,.5);
         const vw=feed.videoWidth||1,vh=feed.videoHeight||1;
+        const flip=isMirrored();   // detector reads the raw frame, we draw the mirrored one
         updateTracks(raw.map(d=>({class:d.class,score:d.score,
-          n:{x:d.bbox[0]/vw,y:d.bbox[1]/vh,w:d.bbox[2]/vw,h:d.bbox[3]/vh}})));
+          n:{x:(flip?vw-d.bbox[0]-d.bbox[2]:d.bbox[0])/vw,
+             y:d.bbox[1]/vh,w:d.bbox[2]/vw,h:d.bbox[3]/vh}})));
         S.ms=Math.round(performance.now()-t0);
       }catch(e){}
       // full rate while watching, half rate while you're still setting up
@@ -1263,13 +1283,19 @@ const App = (() => {
   // Everyone else in this category logs the breach after it happens. The whole
   // point of the device being physically present, with a speaker, is that it can
   // stop the breach instead. So: project each person forward and call out first.
+  //
+  // Two ways to earn a warning. The projection is what makes this preventive
+  // rather than forensic. But someone who walks up to the line and stops there
+  // was never "closing fast", and a man standing at the edge of a press is
+  // exactly who needs telling — so being close enough warns on its own too.
   function approaching(people,zone){
     if(!zone) return null;
     for(const p of people){
-      if(p.age<12) continue;                       // needs a little motion history
       if(zoneHit(p.box,zone)) continue;            // already inside: that's a breach
       const dNow=distToRect(p.cx,p.cy,zone);
       if(dNow<=0 || dNow>NEAR) continue;           // too far away to be meaningful
+      if(p.age>=NEAR_AGE && dNow<=CLOSE) return p; // standing right at the line
+      if(p.age<12) continue;                       // the projection needs motion history
       const dNext=distToRect(p.cx+p.vx*PREDICT, p.cy+p.vy*PREDICT, zone);
       if(dNext < dNow*.6) return p;                // closing fast on the boundary
     }
@@ -1324,6 +1350,9 @@ const App = (() => {
 
       const c=document.createElement("canvas");c.width=c.height=SNAP;
       const x=c.getContext("2d");
+      // Keep the photo the same way round as the screen the supervisor watched,
+      // otherwise the evidence contradicts the alert it belongs to.
+      if(!sim&&isMirrored()){ x.translate(SNAP,0); x.scale(-1,1); }
       x.drawImage(src,ox,oy,side,side,0,0,SNAP,SNAP);
       const raw=c.toDataURL("image/jpeg",.72);
       // Blur the whole frame, not just the detected people. Masking only the
@@ -1344,16 +1373,17 @@ const App = (() => {
   function warn(people){
     const d=new Date(), shot=snapshot(people);
     S.incidents.unshift({id:S.incidents.length+1,kind:"warn",type:"warn",
-      detail:"Someone was heading for the danger zone",
+      detail:"Someone came too close to the danger zone",
       time:stamp(d),date:d.toLocaleDateString("en-IN"),
       t:Date.now(),prevented:true,thumb:shot.raw,anon:shot.anon});
     const f=$("flash");
     f.classList.add("warn","on");
     setTimeout(()=>{f.classList.remove("on");setTimeout(()=>f.classList.remove("warn"),260)},600);
-    beep(660); setTimeout(()=>beep(660),150);
-    buzz([70,50,70]);
-    say(WARN.say);
-    toast(WARN.label,"Called out before anyone crossed the line",true);
+    // a rising chirp to turn the head, then the words behind it
+    [980,1180,1420].forEach((f,i)=>setTimeout(()=>beep(f),i*160));
+    buzz([140,70,140,70,220]);
+    say(WARN.say,450);
+    toast("Restricted area","You are not allowed past this line",true);
     renderLog(); paintStats(); save();
   }
 
@@ -1866,6 +1896,7 @@ const App = (() => {
     $("hudSrc").textContent=sim?"Demo scene":(S.cameraFacing==="user"?"Front camera":"Back camera");
     feed.style.display=sim?"none":"block";
     synth.style.display=sim?"block":"none";
+    syncMirror();
   }
   function syncCameraButton(){
     const b=$("camBtn");

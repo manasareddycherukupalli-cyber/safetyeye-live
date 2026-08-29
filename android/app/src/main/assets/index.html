@@ -31,6 +31,14 @@
   --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
   --ease:cubic-bezier(.22,1,.36,1);
   --spring:cubic-bezier(.34,1.4,.42,1);
+
+  /* Safe-area insets. Android WebView never populates env(safe-area-inset-*), so
+     MainActivity measures the real window insets and overwrites these four at
+     runtime. The env() fallbacks cover Chrome, the PWA and desktop.            */
+  --sat:env(safe-area-inset-top,0px);
+  --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px);
+  --sar:env(safe-area-inset-right,0px);
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -242,6 +250,8 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;
   object-fit:cover;display:block}
 #overlay{z-index:5;touch-action:none}
 #synth{z-index:1}
+/* the front camera is shown the way a mirror behaves; see isMirrored() */
+#feed.mirror{transform:scaleX(-1)}
 
 .hud{position:absolute;inset:0;z-index:10;pointer-events:none;
   display:flex;flex-direction:column;justify-content:space-between;padding:11px}
@@ -441,10 +451,10 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;
   }
   .notch,.glare,.home-ind,.statusbar{display:none}
   /* keep clear of the real notch and home bar */
-  .views{padding-top:env(safe-area-inset-top)}
-  .toast{top:calc(12px + env(safe-area-inset-top))}
-  .onb{padding-top:calc(34px + env(safe-area-inset-top))}
-  .tabs{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .views{padding-top:var(--sat)}
+  .toast{top:calc(12px + var(--sat))}
+  .onb{padding-top:calc(34px + var(--sat))}
+  .tabs{padding-bottom:calc(10px + var(--sab))}
   .stagewrap{aspect-ratio:4/5}
 }
 </style>
@@ -488,12 +498,12 @@ body.android-app .home-ind,
 body.android-app .statusbar{display:none}
 body.android-app .views{
   min-height:0;
-  padding-top:env(safe-area-inset-top);
+  padding-top:var(--sat);
 }
 body.android-app .view{padding-bottom:0}
-body.android-app .toast{top:calc(12px + env(safe-area-inset-top))}
-body.android-app .onb{padding-top:calc(34px + env(safe-area-inset-top))}
-body.android-app .tabs{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+body.android-app .toast{top:calc(12px + var(--sat))}
+body.android-app .onb{padding-top:calc(34px + var(--sat))}
+body.android-app .tabs{padding-bottom:calc(10px + var(--sab))}
 
 @media (min-width: 561px){
   body.android-app .pad{padding-left:clamp(18px,4vw,42px);padding-right:clamp(18px,4vw,42px)}
@@ -525,6 +535,61 @@ body.android-app .tabs{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   body.android-app .tabs{padding-left:6px;padding-right:6px}
   body.android-app .tab{font-size:9px}
   body.android-app .tab svg{width:18px;height:18px}
+}
+
+/* ---------- fits any handset ----------
+   Everything above assumed a portrait phone roughly the size of the mock. These
+   rules cover the rest of the field: display cutouts on the sides, the very small
+   screens still common on site, big handsets, and a phone turned sideways.   */
+
+/* Cutouts and curved edges sit left/right in landscape. Pad the shell, not the
+   individual cards, so nothing has to know about it. */
+body.android-app .screen{
+  padding-left:var(--sal);
+  padding-right:var(--sar);
+}
+
+/* Type scales with the viewport between a 320px handset and a 480px one, so the
+   heading never has to be clipped or wrapped awkwardly on a narrow screen. */
+body.android-app .head h2,
+body.android-app .site-name{font-size:clamp(20px,6.4vw,27px)}
+body.android-app .head .sub,
+body.android-app .site-sub{font-size:clamp(11px,3.2vw,12.5px)}
+body.android-app .tile .n{font-size:clamp(20px,6vw,26px)}
+
+/* Long site names and rule text must never push the layout sideways. */
+body.android-app .head h2,
+body.android-app .site-name,
+body.android-app .tile .n{overflow-wrap:anywhere}
+
+/* Short screens: the camera stage was taking too much of the view and pushing
+   the controls under the fold. */
+@media (max-height: 640px){
+  body.android-app .stagewrap{aspect-ratio:auto;max-height:44svh}
+  body.android-app .head{padding-top:2px;padding-bottom:8px}
+  body.android-app .eyebrow{margin-bottom:4px}
+  body.android-app .tabs{padding-top:6px;padding-bottom:calc(6px + var(--sab))}
+}
+
+/* Landscape: vertical space is the scarce resource, so shrink the chrome and cap
+   the stage by height instead of aspect ratio. */
+@media (orientation: landscape) and (max-height: 520px){
+  body.android-app .head{padding-top:2px;padding-bottom:6px}
+  body.android-app .head h2,
+  body.android-app .site-name{font-size:19px}
+  body.android-app .eyebrow{margin-bottom:3px}
+  body.android-app .stagewrap{aspect-ratio:auto;max-height:58svh}
+  body.android-app .tabs{padding:4px 10px calc(4px + var(--sab))}
+  body.android-app .tab{font-size:9px;gap:2px;padding:4px 0 2px}
+  body.android-app .tab svg{width:16px;height:16px}
+  body.android-app .grid2{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+
+/* Large handsets and foldables: stop the content column growing to full width,
+   which leaves unreadably long lines. */
+@media (min-width: 700px){
+  body.android-app .view{align-items:center}
+  body.android-app .view > *{width:100%;max-width:680px;align-self:center}
 }
 </style>
 </head>
@@ -929,6 +994,8 @@ const App = (() => {
   const WARN_COOLDOWN=4500;  // don't nag
   const PREDICT=45;          // frames ahead (~0.75s) to project a person's path
   const NEAR=.28;            // only warn once someone is this close to the zone
+  const CLOSE=.12;           // this close to the line warns on its own, moving or not
+  const NEAR_AGE=6;          // ~0.5s of tracking before a standing person counts
   const GRACE=4000;          // a warning followed by a breach inside this = not prevented
 
   const $ = id => document.getElementById(id);
@@ -955,7 +1022,7 @@ const App = (() => {
   };
   // A warning is not a violation — it is the system trying to stop one.
   const WARN={label:"Warning called out", color:"#FFB84D", icon:ICON.warn,
-              say:"Restricted area. Move back."};
+              say:"Restricted area. You are not allowed."};
   const svg=(p,c)=>`<svg viewBox="0 0 24 24" style="stroke:${c}">${p}</svg>`;
   // the site name is typed by the user and gets written into the report HTML
   const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>
@@ -1083,17 +1150,25 @@ const App = (() => {
       o.start();o.stop(actx.currentTime+.28);
     }catch(e){}
   }
-  function say(t){
+  // delay lets an alert chirp first and speak second, without the words being
+  // buried under it. A later alert clears a pending one, so the speaker never
+  // announces a warning after the breach it failed to prevent.
+  let sayTimer=null;
+  function say(t,delay){
+    clearTimeout(sayTimer);
     if(!S.speak||!("speechSynthesis" in window)) return;
+    if(delay){ sayTimer=setTimeout(()=>say(t),delay); return; }
     try{
       speechSynthesis.cancel();
       const u=new SpeechSynthesisUtterance(t);
       u.rate=1.02;u.pitch=.95;speechSynthesis.speak(u);
     }catch(e){}
   }
+  // Short on purpose. It has to turn a head and then get out of the way of the
+  // spoken warning behind it — a siren that runs a full second only masks it.
   function alarm(){
     if(!S.sound) return;
-    [980,760,980,760,1120].forEach((f,i)=>setTimeout(()=>beep(f),i*170));
+    [980,1180,1420].forEach((f,i)=>setTimeout(()=>beep(f),i*160));
   }
 
   /* ---------- toast ---------- */
@@ -1139,11 +1214,19 @@ const App = (() => {
         video:{facingMode:{ideal:facing},width:{ideal:960}},audio:false});
     }
   }
+  // The front camera looks back at whoever is holding the phone, so its raw frame
+  // is reversed: step to your right and the un-mirrored picture shows you sliding
+  // left. Every phone camera app flips that preview, and people read it as a
+  // mirror, so we do the same — and then flip everything measured off it, or the
+  // box, the zone test and the forward projection would chase the wrong way.
+  function isMirrored(){ return S.cameraFacing==="user"; }
+  function syncMirror(){ feed.classList.toggle("mirror",isMirrored()); }
   function attachCamera(st,facing){
     const actual=st.getVideoTracks()[0]?.getSettings?.().facingMode;
     S.cameraFacing=(actual==="user"||actual==="environment")?actual:facing;
     S.stream=st; feed.srcObject=st;
     feed.style.display="block"; synth.style.display="none";
+    syncMirror();
     syncCameraButton();
     feed.play().catch(()=>{});
   }
@@ -1317,8 +1400,10 @@ const App = (() => {
       try{
         const raw=await S.model.detect(feed,12,.5);
         const vw=feed.videoWidth||1,vh=feed.videoHeight||1;
+        const flip=isMirrored();   // detector reads the raw frame, we draw the mirrored one
         updateTracks(raw.map(d=>({class:d.class,score:d.score,
-          n:{x:d.bbox[0]/vw,y:d.bbox[1]/vh,w:d.bbox[2]/vw,h:d.bbox[3]/vh}})));
+          n:{x:(flip?vw-d.bbox[0]-d.bbox[2]:d.bbox[0])/vw,
+             y:d.bbox[1]/vh,w:d.bbox[2]/vw,h:d.bbox[3]/vh}})));
         S.ms=Math.round(performance.now()-t0);
       }catch(e){}
       // full rate while watching, half rate while you're still setting up
@@ -1347,13 +1432,19 @@ const App = (() => {
   // Everyone else in this category logs the breach after it happens. The whole
   // point of the device being physically present, with a speaker, is that it can
   // stop the breach instead. So: project each person forward and call out first.
+  //
+  // Two ways to earn a warning. The projection is what makes this preventive
+  // rather than forensic. But someone who walks up to the line and stops there
+  // was never "closing fast", and a man standing at the edge of a press is
+  // exactly who needs telling — so being close enough warns on its own too.
   function approaching(people,zone){
     if(!zone) return null;
     for(const p of people){
-      if(p.age<12) continue;                       // needs a little motion history
       if(zoneHit(p.box,zone)) continue;            // already inside: that's a breach
       const dNow=distToRect(p.cx,p.cy,zone);
       if(dNow<=0 || dNow>NEAR) continue;           // too far away to be meaningful
+      if(p.age>=NEAR_AGE && dNow<=CLOSE) return p; // standing right at the line
+      if(p.age<12) continue;                       // the projection needs motion history
       const dNext=distToRect(p.cx+p.vx*PREDICT, p.cy+p.vy*PREDICT, zone);
       if(dNext < dNow*.6) return p;                // closing fast on the boundary
     }
@@ -1408,6 +1499,9 @@ const App = (() => {
 
       const c=document.createElement("canvas");c.width=c.height=SNAP;
       const x=c.getContext("2d");
+      // Keep the photo the same way round as the screen the supervisor watched,
+      // otherwise the evidence contradicts the alert it belongs to.
+      if(!sim&&isMirrored()){ x.translate(SNAP,0); x.scale(-1,1); }
       x.drawImage(src,ox,oy,side,side,0,0,SNAP,SNAP);
       const raw=c.toDataURL("image/jpeg",.72);
       // Blur the whole frame, not just the detected people. Masking only the
@@ -1428,7 +1522,7 @@ const App = (() => {
   function warn(people){
     const d=new Date(), shot=snapshot(people);
     S.incidents.unshift({id:S.incidents.length+1,kind:"warn",type:"warn",
-      detail:"Someone was heading for the danger zone",
+      detail:"Someone came too close to the danger zone",
       time:stamp(d),date:d.toLocaleDateString("en-IN"),
       t:Date.now(),prevented:true,thumb:shot.raw,anon:shot.anon});
     const f=$("flash");
@@ -1436,8 +1530,8 @@ const App = (() => {
     setTimeout(()=>{f.classList.remove("on");setTimeout(()=>f.classList.remove("warn"),260)},600);
     alarm();
     buzz([140,70,140,70,220]);
-    say(WARN.say);
-    toast("Restricted area","Move back from the marked zone",true);
+    say(WARN.say,450);                    // chirp first, words straight after it
+    toast("Restricted area","You are not allowed past this line",true);
     renderLog(); paintStats(); save();
   }
 
@@ -1950,6 +2044,7 @@ const App = (() => {
     $("hudSrc").textContent=sim?"Demo scene":(S.cameraFacing==="user"?"Front camera":"Back camera");
     feed.style.display=sim?"none":"block";
     synth.style.display=sim?"block":"none";
+    syncMirror();
   }
   function syncCameraButton(){
     const b=$("camBtn");
