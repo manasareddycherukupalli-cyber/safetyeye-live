@@ -282,7 +282,9 @@ const reportOverlay = document.getElementById('reportOverlay');
 const reportContent = document.getElementById('reportContent');
 
 reportBtn.addEventListener('click', async () => {
-  const events = await SafetyEyeLog.getEvents();
+  // This run only. getEvents() would also return every rehearsal we've ever
+  // done on this phone, and the report's numbers have to be this shift's.
+  const events = await SafetyEyeLog.getSessionEvents();
   const summary = SafetyEyeReport.summarize(events);
   reportContent.innerHTML = SafetyEyeReport.renderReportHtml(summary);
   reportOverlay.style.display = 'block';
