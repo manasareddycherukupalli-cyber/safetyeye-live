@@ -37,6 +37,7 @@ function showAlert(event) {
 // ahead of the voice-driven rule creation (a later task) landing on top of it.
 let drawingZone = false;
 let dragStart = null;
+let dragCurrent = null;
 let pendingRect = null;
 
 function canvasPoint(evt) {
@@ -48,16 +49,26 @@ function canvasPoint(evt) {
 
 drawZoneBtn.addEventListener('click', () => {
   drawingZone = true;
-  setStatus('draw mode: click and drag on the video to mark a zone');
+  setStatus('draw mode: drag a box on the video to mark a zone');
 });
 
-canvas.addEventListener('mousedown', (evt) => {
+canvas.addEventListener('pointerdown', (evt) => {
   if (!drawingZone) return;
+  evt.preventDefault();
+  canvas.setPointerCapture(evt.pointerId);
   dragStart = canvasPoint(evt);
 });
 
-canvas.addEventListener('mouseup', (evt) => {
+// Live rubber-band box, so you can see what you are about to draw.
+canvas.addEventListener('pointermove', (evt) => {
   if (!drawingZone || !dragStart) return;
+  evt.preventDefault();
+  dragCurrent = canvasPoint(evt);
+});
+
+canvas.addEventListener('pointerup', (evt) => {
+  if (!drawingZone || !dragStart) return;
+  evt.preventDefault();
   const [ex, ey] = canvasPoint(evt);
   const [sx, sy] = dragStart;
   const rect = {
@@ -67,8 +78,9 @@ canvas.addEventListener('mouseup', (evt) => {
     h: Math.abs(ey - sy),
   };
   dragStart = null;
+  dragCurrent = null;
   drawingZone = false;
-  if (rect.w < 10 || rect.h < 10) return; // ignore accidental clicks
+  if (rect.w < 10 || rect.h < 10) return; // ignore accidental taps
 
   pendingRect = rect;
   zoneForm.style.display = 'block';
@@ -206,6 +218,17 @@ async function startCamera() {
 }
 
 function drawZones() {
+  // the box being dragged right now, before it is named and saved
+  if (dragStart && dragCurrent) {
+    const [sx, sy] = dragStart, [cx, cy] = dragCurrent;
+    ctx.save();
+    ctx.strokeStyle = '#f0ad2a';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    ctx.strokeRect(Math.min(sx, cx), Math.min(sy, cy), Math.abs(cx - sx), Math.abs(cy - sy));
+    ctx.restore();
+  }
+
   ctx.lineWidth = 2;
   ctx.font = '14px sans-serif';
   for (const [name, rect] of ruleEngine.zones) {
