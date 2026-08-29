@@ -14,7 +14,7 @@ Update this file as you go. It is the "where were we" note for a fresh session.
 - [ ] Camera feed rendering on the phone (code written, untestable on laptop — no working laptop camera)
 - [x] Detection loop running (COCO-SSD + IoU tracker + 0.75s trajectory prediction, verified with node logic tests)
 - [x] Zone geometry + rule engine (zone_intrusion, occupancy, obstruction, proximity) with manual click-drag zone drawing UI as a stand-in for voice input
-- [ ] First LLM round trip from the app
+- [x] First LLM round trip from the app (app.js -> llm.js chatCompletion(), verified against a fake local server; needs Manasa's real llama-server to fully confirm)
 - [ ] Speech/typed rule → JSON rules
 - [ ] Spoken warning fires before a crossing
 - [ ] Event log persists across reload
