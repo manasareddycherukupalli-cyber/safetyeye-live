@@ -120,7 +120,7 @@ async function submitRuleText(text) {
   if (!text || !text.trim()) return;
   setStatus('compiling rule…');
   try {
-    const rules = await SafetyEyeLLM.compileRules(text.trim());
+    const { rules } = await LLM.compileRules(text.trim(), [...ruleEngine.zones.keys()]);
     for (const rule of rules) {
       ensureZoneExists(rule.zone);
       ruleEngine.addRule(rule);
@@ -182,11 +182,11 @@ function speakWarning(text) {
 document.getElementById('testLlmBtn').addEventListener('click', async () => {
   setStatus('asking the AI brain…');
   try {
-    const reply = await SafetyEyeLLM.chatCompletion([
+    const { text } = await LLM.chat([
       { role: 'user', content: 'Reply with exactly one word: ready' },
     ]);
     setStatus('running');
-    showAlert({ status: 'warn', rule: { zone: 'AI brain' }, say: `replied: "${reply.trim()}"` });
+    showAlert({ status: 'warn', rule: { zone: 'AI brain' }, say: `replied: "${text.trim()}"` });
   } catch (err) {
     setStatus('running');
     showAlert({ status: 'breach', rule: { zone: 'AI brain' }, say: `not reachable — ${err.message}` });
