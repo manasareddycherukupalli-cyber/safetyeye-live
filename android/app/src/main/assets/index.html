@@ -1154,10 +1154,27 @@ const App = (() => {
   // buried under it. A later alert clears a pending one, so the speaker never
   // announces a warning after the breach it failed to prevent.
   let sayTimer=null;
+  // Android's WebView carries no speech engine: window.speechSynthesis is present,
+  // speak() raises nothing, and the phone stays silent. On the device the warning
+  // therefore goes through the platform engine, which MainActivity exposes here.
+  // Everywhere else — Chrome, the PWA, a laptop — the Web Speech API is used as before.
+  const nativeVoice = (()=>{
+    try{ return (window.SafetyEyeVoice && typeof SafetyEyeVoice.speak==="function") ? SafetyEyeVoice : null; }
+    catch(e){ return null; }
+  })();
+  function stopSpeech(){
+    try{ if(nativeVoice) nativeVoice.stop(); }catch(e){}
+    try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){}
+  }
   function say(t,delay){
     clearTimeout(sayTimer);
-    if(!S.speak||!("speechSynthesis" in window)) return;
+    if(!S.speak) return;
+    if(!nativeVoice && !("speechSynthesis" in window)) return;
     if(delay){ sayTimer=setTimeout(()=>say(t),delay); return; }
+    if(nativeVoice){
+      // The bridge flushes its own queue, so a breach cuts off a pending warning.
+      try{ nativeVoice.speak(t); return; }catch(e){}
+    }
     try{
       speechSynthesis.cancel();
       const u=new SpeechSynthesisUtterance(t);
@@ -1481,7 +1498,9 @@ const App = (() => {
   }
 
   /* ---------- snapshot ---------- */
-  const SNAP=140;
+  // Sized for the page, not the screen: these end up an inch and a quarter wide in a
+  // printed report, and 140px across was a soft, obviously-upscaled stamp there.
+  const SNAP=256;
   // Two frames per alert: the clear one for the supervisor on this phone, and an
   // anonymised one for the report that goes outside.
   //
@@ -1512,7 +1531,9 @@ const App = (() => {
       // where and when the rule was broken.
       const b=document.createElement("canvas");b.width=b.height=SNAP;
       const bx=b.getContext("2d");
-      bx.filter="blur(9px)"; bx.drawImage(c,0,0);
+      // Proportional to the frame. A fixed 9px radius was tuned for a 140px snapshot;
+      // left alone on a larger one it blurs proportionally less and faces come back.
+      bx.filter=`blur(${(SNAP*0.065).toFixed(1)}px)`; bx.drawImage(c,0,0);
       return {raw, anon:b.toDataURL("image/jpeg",.72)};
     }catch(e){ return {raw:"",anon:""}; }
   }
@@ -1775,11 +1796,37 @@ const App = (() => {
   }
   function renderDoc(){ $("doc").innerHTML=docHtml(); }
 
+  // An Android WebView silently ignores <a download> — the click is dropped on the
+  // floor while the app announces the report was saved. When the native bridge is there
+  // the bytes go through it instead; either way this returns where the file landed, or
+  // null, so the callers can say what actually happened rather than what was attempted.
+  const CHUNK=48*1024;
+  const asBytes=c=>c instanceof Uint8Array?c:new TextEncoder().encode(c);
+  function toBase64(bytes){
+    let s="";
+    // btoa wants a binary string, and apply() has a ceiling on argument count
+    for(let i=0;i<bytes.length;i+=0x8000)
+      s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
+    return btoa(s);
+  }
   function download(name,mime,content){
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(new Blob([content],{type:mime}));
-    a.download=name;document.body.appendChild(a);a.click();
-    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},400);
+    const bytes=asBytes(content), bridge=window.SafetyEyeFiles;
+    console.log("download "+name+" bytes="+bytes.length+" bridge="+!!(bridge&&bridge.begin));
+    if(bridge&&bridge.begin){
+      try{
+        bridge.begin();
+        for(let i=0;i<bytes.length;i+=CHUNK)
+          bridge.write(toBase64(bytes.subarray(i,i+CHUNK)));
+        return bridge.finish(name,mime)||null;
+      }catch(e){ return null; }
+    }
+    try{
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(new Blob([bytes],{type:mime}));
+      a.download=name;document.body.appendChild(a);a.click();
+      setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},400);
+      return name;
+    }catch(e){ return null; }
   }
   const docxEsc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>
     ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
@@ -1792,12 +1839,12 @@ const App = (() => {
     <w:insideH w:val="single" w:sz="4" w:color="E8EBEF"/><w:insideV w:val="single" w:sz="4" w:color="E8EBEF"/>
   </w:tblBorders></w:tblPr><w:tblGrid>${widths.map(w=>`<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>${rows.map((row,ri)=>`<w:tr>${row.map((cell,ci)=>docxCell(cell,widths[ci]||1800,ri===0)).join("")}</w:tr>`).join("")}</w:tbl>`;
   const docxImageP=(rid,name,n)=>`<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">
-    <wp:extent cx="914400" cy="914400"/><wp:docPr id="${n}" name="${docxEsc(name)}"/>
+    <wp:extent cx="1143000" cy="1143000"/><wp:docPr id="${n}" name="${docxEsc(name)}"/>
     <wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>
     <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>
       <pic:nvPicPr><pic:cNvPr id="${n}" name="${docxEsc(name)}"/><pic:cNvPicPr/></pic:nvPicPr>
       <pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
-      <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+      <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1143000" cy="1143000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
     </pic:pic></a:graphicData></a:graphic>
   </wp:inline></w:drawing></w:r></w:p>`;
   const docxBytes=(src)=>{
@@ -1882,7 +1929,7 @@ const App = (() => {
           ${docxP("Summary","Heading2")}
           ${docxTable(keyRows.slice(3),[7000,2000])}
           ${docxP("What happened","Heading2")}
-          ${docxTable([[docxP("#","",true),docxP("Time","",true),docxP("What","",true),docxP("Photo","",true)],...incidentRows],[700,1400,5000,1900])}
+          ${docxTable([[docxP("#","",true),docxP("Time","",true),docxP("What","",true),docxP("Photo","",true)],...incidentRows],[700,1400,4800,2100])}
           ${docxP("Made automatically by SafetyEye on "+new Date().toLocaleString("en-IN")+".")}
           ${docxP("The camera was read on the phone itself. No video was sent anywhere or saved; only the photos above were kept.")}
           ${docxP(privacy)}
@@ -1925,22 +1972,32 @@ const App = (() => {
       {name:"docProps/app.xml",data:utf8(app)},
       ...photos.map(p=>({name:"word/media/"+p.filename,data:p.bytes}))
     ];
+    console.log("export: "+incidents.length+" incidents, "+photos.length+"/"+requestedPhotos+" photos");
     if(photos.length!==requestedPhotos){
       const missing=requestedPhotos-photos.length;
       toast("Report not saved",`${missing} photo${missing===1?"":"s"} could not be embedded`,false);
       return;
     }
     const filename=`SafetyEye_Report_DOCX_${Date.now()}.docx`;
-    download(filename,"application/vnd.openxmlformats-officedocument.wordprocessingml.document",zipStored(entries));
-    toast("DOCX saved",`${photos.length} photo${photos.length===1?"":"s"} embedded in the Word file`,true);
+    const saved=download(filename,"application/vnd.openxmlformats-officedocument.wordprocessingml.document",zipStored(entries));
+    if(saved) toast("Report saved to "+saved,
+      `${photos.length} photo${photos.length===1?"":"s"} embedded in the Word file`,true);
+    else toast("Report not saved","This phone would not let the file be written",false);
   }
   function exportCsv(){
     const rows=[["#","Date","Time","What happened","Detail"]]
-      .concat([...S.incidents].reverse().map((i,n)=>
-        [n+1,i.date,i.time,RULES[i.type].label,i.detail]));
-    download(`SafetyEye_Alerts_${Date.now()}.csv`,"text/csv",
-      rows.map(r=>r.map(c=>`"${c}"`).join(",")).join("\n"));
-    toast("Spreadsheet saved","Alert list exported",true);
+      // A warning's type is "warn", which is not one of RULES — reading .label off
+      // that threw, and the button had simply done nothing ever since warnings existed.
+      .concat([...S.incidents].reverse().map((i,n)=>{
+        const warning=i.kind==="warn", rule=warning?WARN:RULES[i.type];
+        return [n+1,i.date,i.time,
+                (rule?rule.label:i.type)+(warning?" (warning)":""),
+                i.detail+(warning?" · "+(i.prevented?"Nobody crossed the line":"They crossed anyway"):"")];
+      }));
+    const saved=download(`SafetyEye_Alerts_${Date.now()}.csv`,"text/csv",
+      rows.map(r=>r.map(c=>`"${String(c).split('"').join('""')}"`).join(",")).join("\n"));
+    if(saved) toast("Spreadsheet saved to "+saved,"The alert list, one row per alert",true);
+    else toast("Spreadsheet not saved","This phone would not let the file be written",false);
   }
 
   /* ---------- zone drawing ---------- */
@@ -2062,7 +2119,7 @@ const App = (() => {
   function toggleSpeak(){
     S.speak=!S.speak;$("speakSw").classList.toggle("on",S.speak);save();
     if(S.speak) say("Spoken warnings are on.");
-    else if("speechSynthesis" in window) speechSynthesis.cancel();
+    else stopSpeech();
   }
   function toggleAnon(){
     S.anonymise=!S.anonymise;

@@ -3,13 +3,23 @@ package com.safetyeye.app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Environment
 import android.os.Bundle
+import android.provider.MediaStore
+import android.speech.tts.TextToSpeech
+import android.util.Base64
 import android.util.Log
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.widget.FrameLayout
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.util.Locale
+import android.webkit.ConsoleMessage
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -32,6 +42,13 @@ class MainActivity : Activity() {
             setBackgroundColor(SHELL_BACKGROUND)
             webViewClient = WebViewClient()
             webChromeClient = object : WebChromeClient() {
+                // The page is the whole app, so its console is the only place a failure
+                // in it shows up. Without this it fails invisibly on the device.
+                override fun onConsoleMessage(m: ConsoleMessage): Boolean {
+                    Log.d(TAG, "web: ${m.message()} (line ${m.lineNumber()})")
+                    return true
+                }
+
                 override fun onPermissionRequest(request: PermissionRequest) {
                     runOnUiThread {
                         val needsCamera = request.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
@@ -61,7 +78,11 @@ class MainActivity : Activity() {
             settings.loadWithOverviewMode = false
             settings.useWideViewPort = false
             settings.textZoom = 100
+            addJavascriptInterface(FileBridge(), "SafetyEyeFiles")
+            addJavascriptInterface(SpeechBridge(), "SafetyEyeVoice")
         }
+
+        startTts()
 
         // targetSdk 35+ draws edge-to-edge: the window fills the whole display, so the
         // page would render under the status bar, the punch-hole camera and the gesture
@@ -92,6 +113,136 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION)
         }
         webView.loadUrl("file:///android_asset/index.html")
+    }
+
+    // Spoken warnings. The page asks for these through window.speechSynthesis, which is
+    // the right API everywhere except here: Android's WebView has no speech engine behind
+    // it. The object exists, speak() reports no error, and nothing is ever said — which is
+    // why the alert beeps came through on the device and the words did not. The platform
+    // engine is wired to the page instead, and the page falls back to the Web Speech API
+    // when this bridge is absent (a normal browser, the PWA).
+    private var tts: TextToSpeech? = null
+
+    @Volatile private var ttsReady = false
+
+    // A breach can fire before the engine finishes starting, and a warning that arrives
+    // late is worse than useless. Hold the most recent line and speak it on ready.
+    @Volatile private var pendingSpeech: String? = null
+
+    private fun startTts() {
+        tts = TextToSpeech(this) { status ->
+            if (status != TextToSpeech.SUCCESS) {
+                Log.w(TAG, "no text-to-speech engine available; warnings will be beeps only")
+                return@TextToSpeech
+            }
+            val engine = tts ?: return@TextToSpeech
+            // Site language first, then any English, then whatever the phone is set to.
+            val wanted = listOf(Locale("en", "IN"), Locale.US, Locale.getDefault())
+            for (locale in wanted) {
+                val result = engine.setLanguage(locale)
+                if (result != TextToSpeech.LANG_MISSING_DATA &&
+                    result != TextToSpeech.LANG_NOT_SUPPORTED
+                ) {
+                    Log.d(TAG, "text-to-speech ready in $locale")
+                    break
+                }
+            }
+            ttsReady = true
+            pendingSpeech?.let { speakNow(it) }
+            pendingSpeech = null
+        }
+    }
+
+    private fun speakNow(text: String) {
+        // QUEUE_FLUSH, never QUEUE_ADD: if a breach follows a warning, the breach must
+        // interrupt it. Announcing a warning after the crossing it failed to prevent is
+        // the one thing this must not do.
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "safetyeye")
+    }
+
+    private inner class SpeechBridge {
+        /** True once an engine is loaded, so the page can decide whether to fall back. */
+        @JavascriptInterface
+        fun ready(): Boolean = ttsReady
+
+        @JavascriptInterface
+        fun speak(text: String) {
+            if (text.isBlank()) return
+            // Logged because a silent phone gives no clue which half is at fault: the
+            // page not asking, or the engine not speaking. This line separates them.
+            Log.d(TAG, "speak(ready=$ttsReady): $text")
+            if (ttsReady) speakNow(text) else pendingSpeech = text
+        }
+
+        @JavascriptInterface
+        fun stop() {
+            pendingSpeech = null
+            tts?.stop()
+        }
+    }
+
+    // The page builds the .docx and the .csv itself and used to hand them to an
+    // <a download>. A WebView drops that click on the floor: nothing was written, and
+    // the page announced "saved" regardless. The bytes now come across in chunks and
+    // are written here, and the page only claims success once this hands back a real
+    // path. Chunked because a whole report crosses the bridge as a string, and one
+    // several-megabyte argument is where that starts to go wrong.
+    private inner class FileBridge {
+        private var buffer: ByteArrayOutputStream? = null
+
+        @JavascriptInterface
+        fun begin() {
+            buffer = ByteArrayOutputStream()
+        }
+
+        @JavascriptInterface
+        fun write(chunk: String) {
+            buffer?.write(Base64.decode(chunk, Base64.DEFAULT))
+        }
+
+        /** Returns where the file landed, or "" if it did not. */
+        @JavascriptInterface
+        fun finish(name: String, mime: String): String {
+            val bytes = buffer?.toByteArray() ?: return ""
+            buffer = null
+            return try {
+                saveToDownloads(name, mime, bytes)
+            } catch (e: Exception) {
+                Log.e(TAG, "could not save $name", e)
+                ""
+            }
+        }
+    }
+
+    private fun saveToDownloads(name: String, mime: String, bytes: ByteArray): String {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val resolver = contentResolver
+            val pending = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, name)
+                put(MediaStore.Downloads.MIME_TYPE, mime)
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, pending)
+                ?: return ""
+            resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: return ""
+            // Until IS_PENDING is cleared the file is invisible to every other app —
+            // which is indistinguishable, to the supervisor, from not having saved it.
+            resolver.update(
+                uri,
+                ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) },
+                null,
+                null,
+            )
+            Log.d(TAG, "saved $name (${bytes.size} bytes) to Downloads")
+            return "Downloads/$name"
+        }
+        // Before Android 10 the public folder needs a storage permission this app never
+        // asks for, so the file goes somewhere it is allowed to write unprompted.
+        val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return ""
+        dir.mkdirs()
+        File(dir, name).writeBytes(bytes)
+        Log.d(TAG, "saved $name (${bytes.size} bytes) to ${dir.absolutePath}")
+        return dir.absolutePath + "/" + name
     }
 
     // left, top, right, bottom in physical pixels. The cutout is folded in with the
@@ -140,6 +291,9 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         pendingPermissionRequest?.deny()
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
         webView.destroy()
         super.onDestroy()
     }
