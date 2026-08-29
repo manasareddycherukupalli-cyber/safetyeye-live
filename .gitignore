@@ -6,3 +6,8 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .vercel
+
+# never commit credentials
+.git-credentials
+*.token
+.env
