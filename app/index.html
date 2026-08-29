@@ -21,6 +21,11 @@
     background: #00ff88; color: #111; border: none; padding: 6px 12px;
     border-radius: 6px; font-weight: bold; cursor: pointer;
   }
+  #testLlmBtn {
+    position: absolute; top: 44px; right: 8px; z-index: 10;
+    background: #55aaff; color: #111; border: none; padding: 6px 12px;
+    border-radius: 6px; font-weight: bold; cursor: pointer;
+  }
   #alertBanner {
     position: absolute; bottom: 8px; left: 8px; right: 8px; z-index: 10;
     max-height: 30%; overflow-y: auto; font-size: 13px;
@@ -38,6 +43,7 @@
     <canvas id="overlay"></canvas>
     <div id="status">starting…</div>
     <button id="drawZoneBtn">Draw Zone</button>
+    <button id="testLlmBtn">Test AI Brain</button>
     <div id="alertBanner"></div>
 
     <div id="zoneForm">
@@ -69,6 +75,7 @@
   <script src="../vendor/coco-ssd/coco-ssd.min.js"></script>
   <script src="vision.js"></script>
   <script src="rules.js"></script>
+  <script src="llm.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

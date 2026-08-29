@@ -94,6 +94,22 @@ document.getElementById('zoneCancelBtn').addEventListener('click', () => {
   setStatus('running');
 });
 
+// --- Task 6: one round trip to the on-device model server, to confirm the
+// app <-> llama-server connection works before anything is built on top of it.
+document.getElementById('testLlmBtn').addEventListener('click', async () => {
+  setStatus('asking the AI brain…');
+  try {
+    const reply = await SafetyEyeLLM.chatCompletion([
+      { role: 'user', content: 'Reply with exactly one word: ready' },
+    ]);
+    setStatus('running');
+    showAlert({ status: 'warn', rule: { zone: 'AI brain' }, say: `replied: "${reply.trim()}"` });
+  } catch (err) {
+    setStatus('running');
+    showAlert({ status: 'breach', rule: { zone: 'AI brain' }, say: `not reachable — ${err.message}` });
+  }
+});
+
 async function startCamera() {
   setStatus('requesting camera…');
   const stream = await navigator.mediaDevices.getUserMedia({
