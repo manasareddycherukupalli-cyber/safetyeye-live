@@ -103,10 +103,116 @@ function paintStats() {
   }
 }
 
+/* ---------- alarm: Web Audio siren + speech ----------
+   Both halves need priming. Mobile browsers start the AudioContext suspended
+   and drop speechSynthesis utterances until a real user gesture has happened,
+   which is why nothing was audible before. Alarm.unlock() runs on the first
+   touch anywhere and on every arm.                                          */
+const Alarm = (() => {
+  let ctx = null;
+  let primed = false;
+  let voice = null;
+
+  function pickVoice() {
+    if (!('speechSynthesis' in window)) return;
+    const voices = speechSynthesis.getVoices();
+    if (!voices.length) return;
+    voice = voices.find((v) => /^en[-_]IN/i.test(v.lang))
+      || voices.find((v) => /^en[-_]GB/i.test(v.lang))
+      || voices.find((v) => /^en/i.test(v.lang))
+      || voices[0];
+  }
+  if ('speechSynthesis' in window) {
+    pickVoice();
+    speechSynthesis.addEventListener('voiceschanged', pickVoice);
+  }
+
+  function unlock() {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch (err) { /* no Web Audio: speech still works */ }
+    if (!primed && 'speechSynthesis' in window) {
+      // An empty utterance inside the gesture opens the speech channel on Android.
+      try {
+        const u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0;
+        speechSynthesis.speak(u);
+        primed = true;
+      } catch (err) { /* ignore */ }
+    }
+  }
+
+  // One tone. `when` is an offset in seconds from now.
+  function tone(freq, when, dur, gain = 0.28, type = 'square') {
+    if (!ctx) return;
+    const t0 = ctx.currentTime + when;
+    const osc = ctx.createOscillator();
+    const amp = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    amp.gain.setValueAtTime(0.0001, t0);
+    amp.gain.exponentialRampToValueAtTime(gain, t0 + 0.012);
+    amp.gain.setValueAtTime(gain, t0 + dur - 0.03);
+    amp.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(amp);
+    amp.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  function beep() {
+    unlock();
+    tone(880, 0, 0.18);
+    tone(660, 0.2, 0.18);
+    return 0.4;
+  }
+
+  // Two-tone emergency siren, three sweeps. Returns its length in seconds so
+  // the spoken warning can start after it instead of fighting it.
+  function siren() {
+    unlock();
+    for (let i = 0; i < 3; i += 1) {
+      tone(950, i * 0.34, 0.16, 0.34, 'sawtooth');
+      tone(640, i * 0.34 + 0.17, 0.16, 0.34, 'sawtooth');
+    }
+    return 1.02;
+  }
+
+  function say(text, delaySec = 0) {
+    if (!text || !('speechSynthesis' in window)) return;
+    // cancel() immediately followed by speak() is swallowed on Android Chrome,
+    // so leave a tick between them.
+    speechSynthesis.cancel();
+    setTimeout(() => {
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = 'en-IN'; }
+        u.rate = 1.0;
+        u.pitch = 1.0;
+        u.volume = 1;
+        speechSynthesis.speak(u);
+      } catch (err) { /* ignore */ }
+    }, Math.max(140, delaySec * 1000));
+  }
+
+  function fire(status, text) {
+    const lead = status === 'breach' ? siren() : beep();
+    say(text, lead);
+    if (navigator.vibrate) navigator.vibrate(status === 'breach' ? [220, 90, 220, 90, 220] : [140]);
+  }
+
+  return { unlock, beep, siren, say, fire };
+})();
+
+// Any touch or click anywhere counts as the gesture that unlocks audio.
+window.addEventListener('pointerdown', () => Alarm.unlock(), { once: true });
+
 $('armBtn').addEventListener('click', () => {
+  Alarm.unlock();
   appState.armed = !appState.armed;
   setStatus(appState.armed ? 'watching for rule breaches' : 'watching paused');
-  if (appState.armed) speakWarning('Now watching.');
+  if (appState.armed) Alarm.say('Now watching.');
 });
 
 const ALERT_COOLDOWN_MS = 2000;
@@ -143,7 +249,7 @@ function showAlert(event) {
   flash.className = `alarm-flash on${event.status === 'warn' ? ' warn' : ''}`;
   setTimeout(() => { flash.className = 'alarm-flash'; }, 650);
 
-  speakWarning(event.say);
+  Alarm.fire(event.status, event.say);
   return true;
 }
 
@@ -233,7 +339,9 @@ canvas.addEventListener('pointerup', (evt) => {
   pendingRect = rect;
   const zoneName = appState.drawMode === 'exit' ? 'exit' : 'restricted';
   const type = appState.drawMode === 'exit' ? 'obstruction' : 'zone_intrusion';
-  const say = appState.drawMode === 'exit' ? 'Keep the exit clear.' : 'Step back from the danger zone.';
+  const say = appState.drawMode === 'exit'
+    ? 'Keep the exit clear. Do not block this path.'
+    : 'Stop. Do not go there. This is a restricted area.';
 
   ruleEngine.setZone(zoneName, pendingRect);
   const existingIdx = ruleEngine.rules.findIndex((r) => r.zone === zoneName);
@@ -334,11 +442,13 @@ if (SpeechRecognitionImpl) {
   speakRuleBtn.title = 'Speech recognition is not supported in this browser. Type the rule instead.';
 }
 
-function speakWarning(text) {
-  if (!('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-}
+// Sound check only — deliberately does not touch the tally or the event log.
+$('testAlarmBtn').addEventListener('click', () => {
+  Alarm.unlock();
+  Alarm.fire('breach', 'Stop. Do not go there. This is a restricted area.');
+  flash.className = 'alarm-flash on';
+  setTimeout(() => { flash.className = 'alarm-flash'; }, 650);
+});
 
 $('testLlmBtn').addEventListener('click', async () => {
   setStatus('asking the AI brain...');

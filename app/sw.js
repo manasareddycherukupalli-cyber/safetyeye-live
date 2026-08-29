@@ -6,7 +6,7 @@
 //   2. Model calls are NEVER cached. /v1/*, /completion and /health go straight to
 //      llama-server. A cached model reply would be a demo that lies.
 
-const CACHE = 'safetyeye-v2';
+const CACHE = 'safetyeye-v3';
 
 const SHELL = [
   './',
