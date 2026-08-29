@@ -12,7 +12,8 @@ Update this file as you go. It is the "where were we" note for a fresh session.
 - [x] tfjs + coco-ssd weights vendored into `vendor/` (verified: all local, 0 CDN calls)
 - [ ] App shell served by `llama-server --path ./app` (shell built, awaiting Manasa's llama-server)
 - [ ] Camera feed rendering on the phone (code written, untestable on laptop — no working laptop camera)
-- [ ] Detection loop running (basic version wired into app.js — no tracker/prediction yet, that's separate)
+- [x] Detection loop running (COCO-SSD + IoU tracker + 0.75s trajectory prediction, verified with node logic tests)
+- [x] Zone geometry + rule engine (zone_intrusion, occupancy, obstruction, proximity) with manual click-drag zone drawing UI as a stand-in for voice input
 - [ ] First LLM round trip from the app
 - [ ] Speech/typed rule → JSON rules
 - [ ] Spoken warning fires before a crossing
