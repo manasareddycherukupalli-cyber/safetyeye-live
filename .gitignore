@@ -11,3 +11,8 @@ Thumbs.db
 .git-credentials
 *.token
 .env
+
+# Android
+android/.gradle/
+android/**/build/
+android/local.properties

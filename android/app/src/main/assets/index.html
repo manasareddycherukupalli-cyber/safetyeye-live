@@ -1,0 +1,1999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta http-equiv="Cache-Control" content="no-store">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="theme-color" content="#0A0D11">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SafetyEye — On-Device Workplace Safety Monitor</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+<style>
+:root{
+  --bg:#0A0D11; --surface:#12171E; --surface-2:#1A212A; --surface-3:#222B36;
+  --line:#1F2832; --line-2:#2A3542;
+  --text:#EDF2F7; --muted:#93A1B1; --dim:#5F6E7E;
+  --mint:#00E5A0; --mint-2:#5FFFC6; --mint-dim:rgba(0,229,160,.12);
+  --red:#FF5A5A; --red-dim:rgba(255,90,90,.12);
+  --blue:#4DA3FF; --blue-dim:rgba(77,163,255,.12);
+  --amber:#FFB84D; --amber-dim:rgba(255,184,77,.12);
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --spring:cubic-bezier(.34,1.4,.42,1);
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--font);color:var(--text);height:100vh;overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  padding:16px;position:relative;
+  background:radial-gradient(1100px 760px at 50% 22%, #FBFCFD 0%, #EDF0F4 42%, #DCE2E9 74%, #C6CFD9 100%);
+}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(760px 480px at 50% 8%, rgba(255,255,255,.85), transparent 62%)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(15,23,32,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,23,32,.035) 1px, transparent 1px);
+  background-size:46px 46px;
+  mask-image:radial-gradient(closest-side at 50% 45%, #000 40%, transparent 92%)}
+
+/* ---------- brand ---------- */
+.brand{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:7px;user-select:none}
+.brand .lockup{display:flex;align-items:center;gap:9px}
+.brand .mark{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;
+  background:linear-gradient(150deg,var(--mint),#00B37D);box-shadow:0 4px 14px rgba(0,169,122,.4)}
+.brand .mark svg{width:15px;height:15px;stroke:#04120C;fill:none;stroke-width:2.1;
+  stroke-linecap:round;stroke-linejoin:round}
+.brand .name{font-size:17px;font-weight:800;letter-spacing:-.02em;color:#0E1620}
+.brand .name span{color:#00A97A}
+.brand .tagline{display:flex;align-items:center;gap:7px;font-size:11px;color:#66727F;
+  letter-spacing:.03em;font-weight:500}
+.brand .tagline .sep{width:3px;height:3px;border-radius:50%;background:#9AA5B1}
+.brand .tagline b{color:#00A97A;font-weight:650}
+
+/* ---------- device ---------- */
+.device{
+  position:relative;z-index:2;padding:9px;border-radius:56px;
+  background:linear-gradient(148deg,#FDFEFE 0%,#C3CCD6 9%,#8D98A6 21%,#6E7A8A 33%,
+    #E9EDF1 47%,#7C8796 60%,#5E6A79 72%,#AFB9C4 86%,#F2F5F7 100%);
+  box-shadow:0 2px 3px rgba(255,255,255,.9) inset, 0 -2px 3px rgba(0,0,0,.28) inset,
+    0 4px 10px -2px rgba(15,23,32,.22), 0 40px 70px -24px rgba(15,23,32,.5),
+    0 80px 120px -40px rgba(15,23,32,.38);
+  flex:none;
+}
+.device::after{content:"";position:absolute;right:-3px;top:196px;width:3.5px;height:84px;
+  border-radius:0 4px 4px 0;background:linear-gradient(180deg,#D2D9E0,#7C8794 40%,#5A6673);
+  box-shadow:1px 0 2px rgba(15,23,32,.3)}
+.device::before{content:"";position:absolute;left:-3px;top:158px;width:3.5px;height:52px;
+  border-radius:4px 0 0 4px;background:linear-gradient(180deg,#D2D9E0,#7C8794 40%,#5A6673);
+  box-shadow:-1px 0 2px rgba(15,23,32,.3)}
+.screen{position:relative;width:392px;height:min(846px, calc(100vh - 132px));
+  border-radius:47px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;
+  box-shadow:0 0 0 4px #0A0E13, 0 0 0 5px rgba(255,255,255,.14), inset 0 0 22px rgba(0,0,0,.6)}
+.notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);
+  width:106px;height:29px;border-radius:16px;background:#04070A;z-index:60}
+.notch::after{content:"";position:absolute;right:13px;top:8.5px;width:12px;height:12px;
+  border-radius:50%;background:radial-gradient(circle at 34% 32%, #1d2836, #070b10 70%);
+  box-shadow:inset 0 0 0 1px #2b3746}
+.glare{position:absolute;inset:0;z-index:58;pointer-events:none;border-radius:47px;
+  background:linear-gradient(118deg,rgba(255,255,255,.075) 0%,rgba(255,255,255,.03) 16%,
+    transparent 34%,transparent 100%)}
+.home-ind{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+  width:136px;height:5px;border-radius:3px;background:rgba(255,255,255,.32);
+  z-index:62;pointer-events:none}
+
+/* ---------- status bar ---------- */
+.statusbar{height:52px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 28px 7px;font-size:13.5px;font-weight:600;letter-spacing:-.01em;z-index:50}
+.statusbar .icons{display:flex;gap:6px;align-items:center;opacity:.92}
+.statusbar svg{width:15px;height:15px;fill:var(--text)}
+
+/* ---------- views ---------- */
+.views{flex:1;position:relative;overflow:hidden}
+.view{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;
+  flex-direction:column;scrollbar-width:none;overscroll-behavior:contain}
+.view::-webkit-scrollbar{display:none}
+.view.active{display:flex;animation:viewIn .38s var(--ease)}
+@keyframes viewIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+.pad{padding:0 18px}
+.head{padding:4px 18px 15px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.head .htext{min-width:0;flex:1}
+.eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--mint);margin-bottom:7px;
+  transition:color .3s}
+.head h2{margin:0;font-size:27px;font-weight:700;letter-spacing:-.032em;line-height:1.12}
+/* the site name is an input styled as the heading — no edit mode, just type */
+.site-name,.site-sub{
+  display:block;width:100%;background:transparent;border:0;padding:0 0 2px;
+  font-family:var(--font);color:var(--text);outline:none;
+  border-bottom:1px dashed var(--line-2);transition:border-color .2s;
+}
+.site-name{font-size:27px;font-weight:700;letter-spacing:-.032em;line-height:1.15}
+.site-sub{font-size:12.5px;color:var(--muted);margin-top:7px;font-weight:400}
+.site-name:focus,.site-sub:focus{border-bottom-color:var(--mint)}
+.site-name::placeholder{color:var(--dim)}
+.site-sub::placeholder{color:var(--dim)}
+.head .sub{margin:7px 0 0;font-size:12.5px;color:var(--muted);line-height:1.55}
+.helpbtn{width:30px;height:30px;border-radius:50%;flex:none;border:1px solid var(--line-2);
+  background:var(--surface);color:var(--muted);cursor:pointer;display:grid;place-items:center;
+  font-family:var(--font);font-size:13px;font-weight:700;transition:.18s var(--ease);margin-top:14px}
+.helpbtn:active{transform:scale(.9)}
+
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.dot.pulse{animation:pulse 1.9s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
+
+/* ---------- cards ---------- */
+.card{position:relative;background:var(--surface);border:1px solid var(--line);
+  border-radius:18px;padding:16px;margin-bottom:11px}
+.card::before{content:"";position:absolute;top:0;left:18px;right:18px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent)}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}
+.card-h h3{margin:0;font-size:13.5px;font-weight:650;letter-spacing:-.015em}
+.card-h .hint-x{font-size:11px;color:var(--dim);font-weight:500}
+
+/* ---------- tiles ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.tile{position:relative;background:var(--surface);border:1px solid var(--line);
+  border-radius:16px;padding:13px 14px;overflow:hidden;transition:border-color .35s,background .35s}
+.tile .th{display:flex;align-items:center;gap:6px;margin-bottom:9px}
+.tile .th svg{width:12px;height:12px;stroke:var(--dim);fill:none;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.tile .th span{font-size:9.5px;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.13em;font-weight:650}
+.tile .n{font-family:var(--mono);font-size:25px;font-weight:700;letter-spacing:-.03em;
+  line-height:1;transition:color .35s;display:inline-block}
+.tile .n.bump{animation:bump .42s var(--spring)}
+@keyframes bump{0%{transform:scale(1)}38%{transform:scale(1.2)}100%{transform:scale(1)}}
+.tile.hot{border-color:rgba(255,90,90,.32);background:linear-gradient(160deg,rgba(255,90,90,.07),var(--surface))}
+.tile.hot .n{color:var(--red)}
+.tile.live .n{color:var(--mint)}
+
+/* ---------- rules ---------- */
+.rule{display:flex;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line)}
+.rule:first-of-type{padding-top:2px}
+.rule:last-child{border-bottom:0;padding-bottom:2px}
+.rule.tap{cursor:pointer;transition:transform .18s var(--ease),opacity .18s}
+.rule.tap:active{transform:scale(.985);opacity:.65}
+.rule .ic{width:36px;height:36px;border-radius:11px;flex:none;display:grid;place-items:center}
+.rule .ic svg{width:17px;height:17px;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.rule .body{flex:1;min-width:0}
+.rule .body b{display:block;font-size:13px;font-weight:650;margin-bottom:3px;letter-spacing:-.01em}
+.rule .body small{font-size:11.5px;color:var(--dim);line-height:1.45;display:block}
+
+.chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;
+  font-size:10.5px;font-weight:700;border:1px solid transparent;flex:none;transition:.3s var(--ease)}
+.chip.mint{background:var(--mint-dim);color:var(--mint);border-color:rgba(0,229,160,.26)}
+.chip.red{background:var(--red-dim);color:var(--red);border-color:rgba(255,90,90,.28)}
+.chip.blue{background:var(--blue-dim);color:var(--blue);border-color:rgba(77,163,255,.28)}
+.chip.amber{background:var(--amber-dim);color:var(--amber);border-color:rgba(255,184,77,.28)}
+.chip.grey{background:var(--surface-2);color:var(--muted);border-color:var(--line-2)}
+
+/* ---------- buttons ---------- */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  padding:15px 18px;border-radius:15px;border:0;cursor:pointer;font-family:var(--font);
+  font-size:14.5px;font-weight:650;letter-spacing:-.015em;
+  background:linear-gradient(180deg,var(--mint-2),var(--mint));color:#04120C;
+  box-shadow:0 6px 18px -6px rgba(0,229,160,.5);
+  transition:transform .16s var(--spring),filter .16s,box-shadow .16s}
+.btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.1;
+  stroke-linecap:round;stroke-linejoin:round}
+.btn:active{transform:scale(.965);filter:brightness(.95)}
+.btn.ghost{background:var(--surface-2);color:var(--text);border:1px solid var(--line-2);box-shadow:none}
+.btn.danger{background:linear-gradient(180deg,#FF7676,var(--red));color:#fff;
+  box-shadow:0 6px 18px -6px rgba(255,90,90,.5)}
+.btn.sm{padding:12px 14px;font-size:12.5px;border-radius:13px}
+.btn:disabled{opacity:.42;cursor:default;box-shadow:none}
+
+.stepper{display:flex;align-items:center;gap:4px;background:var(--surface-2);
+  border:1px solid var(--line-2);border-radius:12px;padding:3px}
+.stepper button{width:30px;height:30px;border-radius:9px;border:0;background:transparent;
+  color:var(--muted);font-size:17px;cursor:pointer;font-family:var(--font);
+  display:grid;place-items:center;transition:.16s var(--ease);line-height:1}
+.stepper button:hover{background:var(--surface-3);color:var(--text)}
+.stepper button:active{transform:scale(.86)}
+.stepper .val{font-family:var(--mono);font-size:16px;font-weight:700;min-width:22px;text-align:center}
+
+.switch{width:46px;height:27px;border-radius:999px;background:var(--surface-2);
+  border:1px solid var(--line-2);position:relative;cursor:pointer;flex:none;transition:.28s var(--ease)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;
+  border-radius:50%;background:var(--dim);transition:.32s var(--spring)}
+.switch.on{background:rgba(0,229,160,.2);border-color:rgba(0,229,160,.45)}
+.switch.on::after{transform:translateX(19px);background:var(--mint);box-shadow:0 0 12px rgba(0,229,160,.6)}
+
+/* ---------- guided steps ---------- */
+.steps{display:flex;gap:7px;margin:0 18px 12px}
+.stp{flex:1;transition:.35s var(--ease)}
+.stp .bar{height:3px;border-radius:3px;background:var(--line);margin-bottom:8px;
+  transition:background .45s var(--ease)}
+.stp .k{display:flex;align-items:center;gap:6px}
+.stp .num{width:16px;height:16px;border-radius:50%;flex:none;display:grid;place-items:center;
+  border:1.5px solid var(--line-2);color:var(--dim);font-size:8.5px;font-weight:700;
+  transition:.35s var(--spring)}
+.stp .num svg{width:9px;height:9px;stroke:#04120C;fill:none;stroke-width:3.2;
+  stroke-linecap:round;stroke-linejoin:round}
+.stp .t{font-size:9.5px;font-weight:650;color:var(--dim);letter-spacing:-.005em;transition:color .35s}
+.stp.now .bar{background:var(--amber)}
+.stp.now .num{border-color:var(--amber);color:var(--amber)}
+.stp.now .t{color:var(--text)}
+.stp.done .bar{background:var(--mint)}
+.stp.done .num{background:var(--mint);border-color:var(--mint)}
+.stp.done .t{color:var(--muted)}
+
+/* ---------- camera ---------- */
+.stagewrap{position:relative;margin:0 18px 12px;border-radius:20px;overflow:hidden;
+  border:1px solid var(--line-2);background:#04070A;aspect-ratio:3/4;
+  box-shadow:0 14px 34px -18px rgba(0,0,0,.9)}
+.stagewrap video,.stagewrap canvas{position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;display:block}
+#overlay{z-index:5;touch-action:none}
+#synth{z-index:1}
+
+.hud{position:absolute;inset:0;z-index:10;pointer-events:none;
+  display:flex;flex-direction:column;justify-content:space-between;padding:11px}
+.hud-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.hud-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;
+  background:rgba(4,7,10,.76);backdrop-filter:blur(14px);font-size:10px;font-weight:700;
+  letter-spacing:.11em;text-transform:uppercase;border:1px solid rgba(255,255,255,.1);
+  transition:color .3s,border-color .3s}
+.hud-pill.armed{color:var(--mint);border-color:rgba(0,229,160,.4)}
+.hud-pill.alarm{color:var(--red);border-color:rgba(255,90,90,.5)}
+.hud-pill.idle{color:var(--amber);border-color:rgba(255,184,77,.42)}
+.hud-pill.src{color:var(--muted)}
+.hud-bottom{display:flex;gap:5px;align-items:stretch}
+.hud-stat{flex:1;background:rgba(4,7,10,.76);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:6px 8px;min-width:0}
+.hud-stat span{display:block;color:var(--dim);font-size:8.5px;letter-spacing:.11em;
+  text-transform:uppercase;font-weight:700;margin-bottom:2px;white-space:nowrap}
+.hud-stat b{font-family:var(--mono);font-size:12.5px;font-weight:700;letter-spacing:-.02em}
+
+.alarm-flash{position:absolute;inset:0;z-index:8;pointer-events:none;
+  box-shadow:inset 0 0 0 3px var(--red), inset 0 0 70px rgba(255,90,90,.4);
+  opacity:0;transition:opacity .2s var(--ease)}
+.alarm-flash.on{opacity:1}
+.alarm-flash.warn{box-shadow:inset 0 0 0 3px var(--amber), inset 0 0 70px rgba(255,184,77,.34)}
+
+.loading{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:13px;background:rgba(4,7,10,.95);
+  text-align:center;padding:26px;transition:opacity .45s var(--ease)}
+.loading.hide{opacity:0;pointer-events:none}
+.loading .spin{width:32px;height:32px;border-radius:50%;
+  border:2.5px solid rgba(255,255,255,.08);border-top-color:var(--mint);
+  animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading b{font-size:13.5px;font-weight:650}
+.loading small{font-size:11.5px;color:var(--dim);line-height:1.6;max-width:245px}
+
+.toolbar{display:flex;gap:6px;margin:0 18px 12px;background:var(--surface);
+  border:1px solid var(--line);border-radius:15px;padding:5px}
+.tool{flex:1;padding:9px 4px;border-radius:11px;border:1px solid transparent;background:transparent;
+  color:var(--dim);font-family:var(--font);font-size:11px;font-weight:650;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:5px;transition:.2s var(--ease)}
+.tool svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.tool:active{transform:scale(.94)}
+.tool.on{background:var(--surface-2);border-color:currentColor}
+.tool[data-zone="restricted"].on{color:var(--red)}
+.tool[data-zone="exit"].on{color:var(--blue)}
+
+.hint{display:flex;gap:9px;align-items:flex-start;background:var(--amber-dim);
+  border:1px solid rgba(255,184,77,.26);color:var(--amber);border-radius:13px;
+  padding:11px 13px;font-size:11.5px;line-height:1.5;margin:0 18px 12px;font-weight:500;
+  animation:viewIn .3s var(--ease)}
+.hint svg{width:15px;height:15px;flex:none;margin-top:.5px;stroke:currentColor;fill:none;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- log ---------- */
+.inc{display:flex;gap:11px;align-items:center;padding:10px;background:var(--surface);
+  border:1px solid var(--line);border-radius:15px;margin-bottom:8px;position:relative;
+  overflow:hidden;animation:incIn .45s var(--ease)}
+@keyframes incIn{from{opacity:0;transform:translateX(-14px) scale(.97)}to{opacity:1;transform:none}}
+.inc .bar{position:absolute;left:0;top:0;bottom:0;width:3px}
+.inc img{width:58px;height:58px;border-radius:11px;object-fit:cover;flex:none;
+  background:#04070A;margin-left:4px}
+.inc .body{flex:1;min-width:0}
+.inc .t{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;margin-bottom:4px}
+.inc .t svg{width:13px;height:13px;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.inc .d{font-size:11px;color:var(--muted);line-height:1.4;margin-bottom:3px}
+.inc .m{font-family:var(--mono);font-size:10px;color:var(--dim);font-weight:500}
+
+.empty{text-align:center;padding:44px 26px;color:var(--dim);animation:viewIn .4s var(--ease)}
+.empty .ico{width:52px;height:52px;border-radius:16px;margin:0 auto 14px;display:grid;
+  place-items:center;background:var(--surface);border:1px solid var(--line)}
+.empty .ico svg{width:23px;height:23px;stroke:var(--dim);fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.empty b{display:block;font-size:13.5px;color:var(--muted);margin-bottom:6px;font-weight:600}
+.empty small{font-size:11.5px;line-height:1.6;max-width:215px;display:inline-block;margin-bottom:16px}
+
+/* ---------- report ---------- */
+.doc{background:#fff;color:#15181C;border-radius:14px;padding:24px 21px;font-size:11px;
+  line-height:1.6;box-shadow:0 18px 40px -20px rgba(0,0,0,.8)}
+.doc .brandrow{display:flex;align-items:center;gap:7px;margin-bottom:14px}
+.doc .brandrow .m{width:19px;height:19px;border-radius:6px;background:#00B37D;display:grid;place-items:center}
+.doc .brandrow .m svg{width:11px;height:11px;stroke:#fff;fill:none;stroke-width:2.2;
+  stroke-linecap:round;stroke-linejoin:round}
+.doc .brandrow b{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6B7683}
+.doc h1{font-size:16.5px;margin:0 0 4px;letter-spacing:-.02em;font-weight:700}
+.doc .sub{font-size:10.5px;color:#6B7683;margin-bottom:15px;padding-bottom:13px;border-bottom:2px solid #15181C}
+.doc h2{font-size:9.5px;text-transform:uppercase;letter-spacing:.13em;color:#6B7683;
+  margin:17px 0 9px;font-weight:700}
+.doc .kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;
+  border-bottom:1px solid #EDF0F3;font-size:10.5px}
+.doc .kv span{color:#59636F}
+.doc .kv b{font-weight:650;font-variant-numeric:tabular-nums}
+.doc table{width:100%;border-collapse:collapse;font-size:10px}
+.doc th{text-align:left;background:#F4F6F8;padding:7px 8px;font-size:9px;text-transform:uppercase;
+  letter-spacing:.07em;color:#59636F;border-bottom:1px solid #DEE3E8;font-weight:700}
+.doc td{padding:7px 8px;border-bottom:1px solid #EDF0F3;vertical-align:middle}
+.doc td img{width:36px;height:36px;object-fit:cover;border-radius:5px;display:block;
+  transition:filter .3s}
+.doc .sig{margin-top:19px;padding-top:13px;border-top:1px solid #DEE3E8;font-size:9px;
+  color:#7A8593;line-height:1.75}
+
+/* ---------- tabs ---------- */
+.tabs{flex:none;display:flex;gap:2px;background:rgba(10,13,17,.96);backdrop-filter:blur(22px);
+  border-top:1px solid var(--line);padding:8px 10px 20px}
+.tab{flex:1;background:0;border:0;cursor:pointer;font-family:var(--font);display:flex;
+  flex-direction:column;align-items:center;gap:5px;color:var(--dim);font-size:9.5px;
+  font-weight:650;padding:6px 0 4px;transition:color .22s var(--ease);position:relative}
+.tab svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.85;
+  stroke-linecap:round;stroke-linejoin:round;transition:transform .3s var(--spring)}
+.tab:active svg{transform:scale(.86)}
+.tab.active{color:var(--mint)}
+.tab.active svg{transform:translateY(-2px)}
+.tab.active::before{content:"";position:absolute;top:-8px;left:50%;transform:translateX(-50%);
+  width:22px;height:2.5px;border-radius:0 0 3px 3px;background:var(--mint);
+  box-shadow:0 0 10px var(--mint);animation:tabIn .34s var(--spring)}
+@keyframes tabIn{from{width:0;opacity:0}to{width:22px;opacity:1}}
+.tab .badge{position:absolute;top:2px;right:50%;margin-right:-20px;min-width:15px;height:15px;
+  border-radius:8px;background:var(--red);color:#fff;font-size:8.5px;font-weight:700;
+  display:grid;place-items:center;padding:0 4px;border:1.5px solid var(--bg);
+  animation:bump .4s var(--spring)}
+
+/* ---------- toast ---------- */
+.toast{position:absolute;left:14px;right:14px;top:56px;z-index:70;
+  background:linear-gradient(180deg,#FF7070,var(--red));color:#fff;border-radius:16px;
+  padding:12px 14px;display:flex;align-items:center;gap:11px;
+  box-shadow:0 16px 38px -10px rgba(255,90,90,.6);opacity:0;visibility:hidden;
+  transform:translateY(-18px) scale(.96);
+  transition:opacity .3s var(--ease),transform .42s var(--spring),visibility .42s}
+.toast.show{opacity:1;visibility:visible;transform:none}
+.toast.ok{background:linear-gradient(180deg,#4DFFC0,var(--mint));color:#04120C;
+  box-shadow:0 16px 38px -10px rgba(0,229,160,.55)}
+.toast.ok .ic{background:rgba(4,18,12,.16)}
+.toast.ok .ic svg{stroke:#04120C}
+.toast .ic{width:32px;height:32px;border-radius:10px;flex:none;display:grid;place-items:center;
+  background:rgba(255,255,255,.2)}
+.toast .ic svg{width:17px;height:17px;stroke:#fff;fill:none;stroke-width:2.2;
+  stroke-linecap:round;stroke-linejoin:round}
+.toast .tt{font-size:13px;font-weight:700;margin-bottom:2px}
+.toast .ts{font-size:11px;opacity:.92;font-weight:500}
+
+/* ---------- privacy ---------- */
+.privacy{background:linear-gradient(155deg,rgba(0,229,160,.11),rgba(0,229,160,.03));
+  border:1px solid rgba(0,229,160,.24);border-radius:18px;padding:15px;margin-bottom:11px}
+.privacy .r{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.privacy .r svg{width:16px;height:16px;stroke:var(--mint);fill:none;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;flex:none}
+.privacy .r b{font-size:12.5px;font-weight:650;color:var(--mint)}
+.privacy p{margin:0;font-size:11.5px;color:#8FCFB6;line-height:1.55}
+.netrow{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-top:11px;padding-top:11px;border-top:1px solid rgba(0,229,160,.18)}
+.netrow .l{font-size:11.5px;color:#8FCFB6;font-weight:550}
+
+/* ---------- onboarding ---------- */
+.onb{position:absolute;inset:0;z-index:80;background:rgba(7,10,14,.985);
+  backdrop-filter:blur(10px);display:none;flex-direction:column;padding:78px 26px 34px}
+.onb.show{display:flex;animation:viewIn .4s var(--ease)}
+.onb .slide{flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:16px}
+.onb .slide.on{display:flex;animation:viewIn .42s var(--ease)}
+.onb .big{width:78px;height:78px;border-radius:26px;display:grid;place-items:center;
+  background:linear-gradient(155deg,rgba(0,229,160,.18),rgba(0,229,160,.05));
+  border:1px solid rgba(0,229,160,.3)}
+.onb .big svg{width:34px;height:34px;stroke:var(--mint);fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.onb h3{margin:0;font-size:22px;font-weight:700;letter-spacing:-.03em;line-height:1.2}
+.onb p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.6;max-width:270px}
+.onb .foot{display:flex;flex-direction:column;gap:14px;align-items:center}
+.onb .dots{display:flex;gap:6px}
+.onb .dots i{width:6px;height:6px;border-radius:50%;background:var(--line-2);
+  transition:.35s var(--spring)}
+.onb .dots i.on{background:var(--mint);width:20px;border-radius:3px}
+.onb .skip{background:0;border:0;color:var(--dim);font-family:var(--font);font-size:12px;
+  font-weight:600;cursor:pointer;padding:6px}
+
+.footnote{font-size:10.5px;color:var(--dim);line-height:1.6;padding:2px 24px 24px;text-align:center}
+.spacer{height:20px;flex:none}
+.stack{display:flex;flex-direction:column;gap:9px}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+
+/* ---------- real phone ----------
+   On a laptop the app sits inside a mock device so it reads as a phone screen.
+   On an actual phone that mock is nonsense — a fake bezel, notch and status bar
+   squeezed inside the real ones. Below tablet width the chrome is dropped and the
+   app simply becomes the screen.                                              */
+@media (max-width: 560px){
+  body{padding:0;gap:0;background:var(--bg);height:100dvh}
+  body::before,body::after{display:none}
+  .brand{display:none}
+  .device{padding:0;border-radius:0;background:none;box-shadow:none}
+  .device::before,.device::after{display:none}
+  .screen{
+    width:100vw;height:100dvh;border-radius:0;box-shadow:none;
+  }
+  .notch,.glare,.home-ind,.statusbar{display:none}
+  /* keep clear of the real notch and home bar */
+  .views{padding-top:env(safe-area-inset-top)}
+  .toast{top:calc(12px + env(safe-area-inset-top))}
+  .onb{padding-top:calc(34px + env(safe-area-inset-top))}
+  .tabs{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .stagewrap{aspect-ratio:4/5}
+}
+</style>
+<style>
+/* Android WebView: the HTML is the real app here, not a desktop phone mock. */
+body.android-app{
+  width:100vw;
+  height:100svh;
+  min-height:100svh;
+  padding:0;
+  gap:0;
+  overflow:hidden;
+  justify-content:flex-start;
+  background:var(--bg);
+}
+body.android-app::before,
+body.android-app::after{display:none}
+body.android-app .brand{display:none}
+body.android-app .device{
+  width:100vw;
+  height:100svh;
+  padding:0;
+  border-radius:0;
+  background:none;
+  box-shadow:none;
+  flex:1 1 auto;
+}
+body.android-app .device::before,
+body.android-app .device::after{display:none}
+body.android-app .screen{
+  width:100vw;
+  height:100svh;
+  max-width:none;
+  max-height:none;
+  border-radius:0;
+  box-shadow:none;
+}
+body.android-app .notch,
+body.android-app .glare,
+body.android-app .home-ind,
+body.android-app .statusbar{display:none}
+body.android-app .views{
+  min-height:0;
+  padding-top:env(safe-area-inset-top);
+}
+body.android-app .view{padding-bottom:0}
+body.android-app .toast{top:calc(12px + env(safe-area-inset-top))}
+body.android-app .onb{padding-top:calc(34px + env(safe-area-inset-top))}
+body.android-app .tabs{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+
+@media (min-width: 561px){
+  body.android-app .pad{padding-left:clamp(18px,4vw,42px);padding-right:clamp(18px,4vw,42px)}
+  body.android-app .head{padding-left:clamp(18px,4vw,42px);padding-right:clamp(18px,4vw,42px)}
+  body.android-app .stagewrap,
+  body.android-app .toolbar,
+  body.android-app .hint,
+  body.android-app .steps{margin-left:clamp(18px,4vw,42px);margin-right:clamp(18px,4vw,42px)}
+  body.android-app .grid2{grid-template-columns:repeat(3,minmax(0,1fr))}
+  body.android-app .stagewrap{aspect-ratio:16/9;max-height:52svh}
+  body.android-app .doc{font-size:12px}
+}
+
+@media (max-width: 380px), (max-height: 720px){
+  body.android-app .head{padding-bottom:10px}
+  body.android-app .head h2,
+  body.android-app .site-name{font-size:24px}
+  body.android-app .site-sub,
+  body.android-app .head .sub{font-size:11.5px;line-height:1.45}
+  body.android-app .pad{padding-left:14px;padding-right:14px}
+  body.android-app .head{padding-left:14px;padding-right:14px}
+  body.android-app .card{padding:13px;margin-bottom:9px;border-radius:15px}
+  body.android-app .tile{padding:11px 12px;border-radius:14px}
+  body.android-app .tile .n{font-size:22px}
+  body.android-app .rule{gap:10px;padding:10px 0}
+  body.android-app .rule .ic{width:32px;height:32px;border-radius:10px}
+  body.android-app .stagewrap{margin-left:14px;margin-right:14px;aspect-ratio:1/1}
+  body.android-app .toolbar{margin-left:14px;margin-right:14px}
+  body.android-app .tabs{padding-left:6px;padding-right:6px}
+  body.android-app .tab{font-size:9px}
+  body.android-app .tab svg{width:18px;height:18px}
+}
+</style>
+</head>
+<body class="android-app">
+
+<div class="brand">
+  <div class="lockup">
+    <div class="mark">
+      <svg viewBox="0 0 24 24"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+    </div>
+    <div class="name">Safety<span>Eye</span></div>
+  </div>
+  <div class="tagline">Turns any phone into a site safety monitor <span class="sep"></span> <b>works with no internet</b></div>
+</div>
+
+<div class="device">
+  <div class="screen">
+    <div class="notch"></div>
+    <div class="glare"></div>
+    <div class="home-ind"></div>
+
+    <div class="statusbar">
+      <div id="clock">9:41</div>
+      <div class="icons">
+        <svg viewBox="0 0 24 24"><path d="M2 22h3v-8H2zm5.5 0h3V8h-3zM13 22h3V4h-3zm5.5 0h3V11h-3z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 21l3.5-4.2a5.4 5.4 0 00-7 0zM5 12.7l2 2.4a8.6 8.6 0 0110 0l2-2.4a12 12 0 00-14 0zM1.5 8.5l2 2.4a15.5 15.5 0 0117 0l2-2.4a19 19 0 00-21 0z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M3 7h15a2 2 0 012 2v6a2 2 0 01-2 2H3a2 2 0 01-2-2V9a2 2 0 012-2zm18 3h1v4h-1z"/></svg>
+      </div>
+    </div>
+
+    <!-- onboarding -->
+    <div class="onb" id="onb">
+      <div class="slide on" data-s="0">
+        <div class="big"><svg viewBox="0 0 24 24"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <h3>Point it at the danger</h3>
+        <p>Prop the phone facing the area you're worried about — a machine, a pit, a doorway. Its camera becomes a safety monitor.</p>
+      </div>
+      <div class="slide" data-s="1">
+        <div class="big"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="4 3"/><path d="M9 12h6M12 9v6"/></svg></div>
+        <h3>Draw the rules by finger</h3>
+        <p>Mark the area people must stay out of, and the fire exit that must stay clear. Takes about five seconds.</p>
+      </div>
+      <div class="slide" data-s="2">
+        <div class="big"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></div>
+        <h3>It watches. You get the record.</h3>
+        <p>Every breach is saved with a photo and a time. At the end of the shift, one tap turns it into a report you can send.</p>
+      </div>
+      <div class="foot">
+        <div class="dots"><i class="on"></i><i></i><i></i></div>
+        <button class="btn" id="onbNext" onclick="App.onbNext()">Next</button>
+        <button class="skip" onclick="App.onbClose()">Skip</button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast">
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L14.7 3.9a2 2 0 00-3.4 0z"/></svg></div>
+      <div>
+        <div class="tt" id="toastTitle">Danger zone entered</div>
+        <div class="ts" id="toastSub">Saved with photo</div>
+      </div>
+    </div>
+
+    <div class="views">
+
+      <!-- ============ SITE ============ -->
+      <section class="view active" id="v-home">
+        <div class="head">
+          <div class="htext">
+            <div class="eyebrow"><span class="dot pulse"></span> Site active</div>
+            <input class="site-name" id="siteName" spellcheck="false" maxlength="42"
+                   placeholder="What are you watching?" value="Tower B — Level 4">
+            <input class="site-sub" id="siteSub" spellcheck="false" maxlength="60"
+                   placeholder="Site, area or shift" value="Sector 12 Construction · Shift 2 of 3">
+          </div>
+          <button class="helpbtn" onclick="App.onbOpen()" title="How it works">?</button>
+        </div>
+
+        <div class="pad">
+          <div class="grid2" style="margin-bottom:11px">
+            <div class="tile" id="t-inc">
+              <div class="th"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L14.7 3.9a2 2 0 00-3.4 0z"/></svg><span>Breaches</span></div>
+              <div class="n" id="h-inc">0</div>
+            </div>
+            <div class="tile">
+              <div class="th"><svg viewBox="0 0 24 24"><path d="M11 5L3 19h16L11 5z"/><path d="M11 10v4M11 17h.01"/></svg><span>Warned in time</span></div>
+              <div class="n" id="h-warn" style="color:var(--amber)">0</div>
+            </div>
+            <div class="tile" id="t-people">
+              <div class="th"><svg viewBox="0 0 24 24"><path d="M16 20v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 00-3-3.9"/></svg><span>People now</span></div>
+              <div class="n" id="h-people">—</div>
+            </div>
+            <div class="tile" id="t-mode">
+              <div class="th"><svg viewBox="0 0 24 24"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg><span>Camera</span></div>
+              <div class="n" id="h-mode">OFF</div>
+            </div>
+            <div class="tile">
+              <div class="th"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Time watched</span></div>
+              <div class="n" id="h-up">00:00</div>
+            </div>
+            <div class="tile">
+              <div class="th"><svg viewBox="0 0 24 24"><path d="M12 3l8 3.5V12c0 4.6-3.2 7.9-8 9-4.8-1.1-8-4.4-8-9V6.5z"/><path d="M9 12l2 2 4-4"/></svg><span>Prevented</span></div>
+              <div class="n" id="h-prev" style="color:var(--mint)">—</div>
+            </div>
+          </div>
+
+          <div class="card" id="prevCard" style="display:none;background:linear-gradient(155deg,rgba(255,184,77,.1),var(--surface));border-color:rgba(255,184,77,.28)">
+            <div class="card-h" style="margin-bottom:11px">
+              <h3 style="color:var(--amber)">Warned before it happened</h3>
+              <span class="chip amber" id="p-pct">—</span>
+            </div>
+            <p style="margin:0 0 11px;font-size:11.5px;color:var(--muted);line-height:1.5">
+              The phone calls out when someone is heading for the danger zone — before they cross it.
+              A recorded breach means the warning didn't work.
+            </p>
+            <div style="display:flex;gap:22px">
+              <div><div style="font-family:var(--mono);font-size:19px;font-weight:700;color:var(--amber)" id="p-warn">0</div>
+                   <div style="font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em;font-weight:650;margin-top:2px">Warnings</div></div>
+              <div><div style="font-family:var(--mono);font-size:19px;font-weight:700;color:var(--red)" id="p-brch">0</div>
+                   <div style="font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em;font-weight:650;margin-top:2px">Crossed anyway</div></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">
+              <h3>What it watches for</h3>
+              <span class="chip grey" id="h-armed">1 of 3 on</span>
+            </div>
+
+            <div class="rule tap" onclick="App.setRule('restricted')">
+              <div class="ic" style="background:var(--red-dim)">
+                <svg viewBox="0 0 24 24" style="stroke:var(--red)"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+              </div>
+              <div class="body">
+                <b>Someone heads for a danger zone</b>
+                <small>Shouts a warning before they cross, and logs it if they still do</small>
+              </div>
+              <span class="chip grey" id="r-1">Set up</span>
+            </div>
+
+            <div class="rule">
+              <div class="ic" style="background:var(--amber-dim)">
+                <svg viewBox="0 0 24 24" style="stroke:var(--amber)"><path d="M16 20v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 00-3-3.9M16.5 3.3a4 4 0 010 7.4"/></svg>
+              </div>
+              <div class="body">
+                <b>Too many people in one place</b>
+                <small>Alerts above the limit you set below</small>
+              </div>
+              <span class="chip amber" id="r-2">Max 3</span>
+            </div>
+
+            <div class="rule tap" onclick="App.setRule('exit')">
+              <div class="ic" style="background:var(--blue-dim)">
+                <svg viewBox="0 0 24 24" style="stroke:var(--blue)"><path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h8"/><path d="M14 3l4 2v14l-4 2z"/></svg>
+              </div>
+              <div class="body">
+                <b>Something blocks the fire exit</b>
+                <small>Tap to draw the doorway that must stay clear</small>
+              </div>
+              <span class="chip grey" id="r-3">Set up</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h" style="margin-bottom:0">
+              <div>
+                <h3>How many people are safe here</h3>
+                <div class="hint-x" style="margin-top:3px">Alerts above this number</div>
+              </div>
+              <div class="stepper">
+                <button onclick="App.limit(-1)">−</button>
+                <div class="val" id="limitVal">3</div>
+                <button onclick="App.limit(1)">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h" style="margin-bottom:0">
+              <div>
+                <h3>Alarm sound</h3>
+                <div class="hint-x" style="margin-top:3px">Beeps when a rule is broken</div>
+              </div>
+              <div class="switch on" id="soundSw" onclick="App.toggleSound()"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h" style="margin-bottom:0">
+              <div>
+                <h3>Say the warning out loud</h3>
+                <div class="hint-x" style="margin-top:3px">So the floor can hear it, not just the phone</div>
+              </div>
+              <div class="switch on" id="speakSw" onclick="App.toggleSpeak()"></div>
+            </div>
+          </div>
+
+          <div class="privacy">
+            <div class="r">
+              <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+              <b>Nothing leaves this phone</b>
+            </div>
+            <p>The camera is read by the phone itself. No video is uploaded, streamed or saved — only a photo of the moment a rule was broken, kept here.</p>
+            <div class="netrow">
+              <span class="l">Internet</span>
+              <span class="chip grey" id="netChip">Connected</span>
+            </div>
+            <p style="margin-top:8px;font-size:11px;opacity:.85">Switch it off and everything keeps working exactly the same.</p>
+          </div>
+
+          <button class="btn" onclick="App.go('monitor')">
+            <svg viewBox="0 0 24 24"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            Open the camera
+          </button>
+        </div>
+        <div class="spacer"></div>
+      </section>
+
+      <!-- ============ MONITOR ============ -->
+      <section class="view" id="v-monitor">
+        <div class="head" style="padding-bottom:12px">
+          <div class="htext">
+            <div class="eyebrow" id="m-eyebrow"><span class="dot"></span> Not watching yet</div>
+            <h2>Camera</h2>
+          </div>
+        </div>
+
+        <div class="steps">
+          <div class="stp" id="stp1">
+            <div class="bar"></div>
+            <div class="k"><span class="num" id="stp1n">1</span><span class="t">Draw a zone</span></div>
+          </div>
+          <div class="stp" id="stp2">
+            <div class="bar"></div>
+            <div class="k"><span class="num" id="stp2n">2</span><span class="t">Start watching</span></div>
+          </div>
+          <div class="stp" id="stp3">
+            <div class="bar"></div>
+            <div class="k"><span class="num" id="stp3n">3</span><span class="t">Get alerts</span></div>
+          </div>
+        </div>
+
+        <div class="stagewrap" id="stagewrap">
+          <video id="feed" playsinline muted autoplay></video>
+          <canvas id="synth"></canvas>
+          <canvas id="overlay"></canvas>
+          <div class="alarm-flash" id="flash"></div>
+
+          <div class="hud">
+            <div class="hud-top">
+              <div class="hud-pill idle" id="hudState"><span class="dot pulse"></span> Not started</div>
+              <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+                <div class="hud-pill src" id="hudSrc">Live camera</div>
+                <div class="hud-pill armed" id="wakeChip" style="display:none">Screen held on</div>
+              </div>
+            </div>
+            <div class="hud-bottom">
+              <div class="hud-stat"><span>People</span><b id="s-people">0</b></div>
+              <div class="hud-stat"><span>Warned</span><b id="s-warn" style="color:var(--amber)">0</b></div>
+              <div class="hud-stat"><span>Breach</span><b id="s-inc">0</b></div>
+              <div class="hud-stat"><span>Speed</span><b id="s-ms">—</b></div>
+              <div class="hud-stat"><span>Net</span><b id="s-net" style="color:var(--mint)">OFF</b></div>
+            </div>
+          </div>
+
+          <div class="loading" id="loader">
+            <div class="spin"></div>
+            <b id="loadTitle">Getting the camera ready</b>
+            <small id="loadSub">Loading the detection model onto this phone. It only downloads once.</small>
+          </div>
+        </div>
+
+        <div class="hint" id="drawHint" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>
+          <span id="drawHintText">Drag a box on the picture.</span>
+        </div>
+
+        <div class="toolbar">
+          <button class="tool" data-zone="restricted" onclick="App.draw('restricted')">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+            Danger zone
+          </button>
+          <button class="tool" data-zone="exit" onclick="App.draw('exit')">
+            <svg viewBox="0 0 24 24"><path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h8"/><path d="M14 3l4 2v14l-4 2z"/></svg>
+            Fire exit
+          </button>
+          <button class="tool" onclick="App.clearZones()">
+            <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+            Erase
+          </button>
+        </div>
+
+        <div class="pad stack">
+          <button class="btn" id="armBtn" onclick="App.toggleArm()">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 9l5 3-5 3z"/></svg>
+            Start watching
+          </button>
+          <div class="grid2">
+            <button class="btn ghost sm" id="camBtn" onclick="App.flipCamera()" aria-label="Switch camera">
+              <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14.6-4L3 9"/><path d="M3 4v5h5M4 13a8 8 0 0014.6 4L21 15"/><path d="M21 20v-5h-5"/></svg>
+              Front camera
+            </button>
+            <button class="btn ghost sm" id="srcBtn" onclick="App.toggleSource()">Use the demo scene instead</button>
+          </div>
+        </div>
+
+        <div class="footnote">
+          The picture is read on this phone and never sent anywhere.
+        </div>
+      </section>
+
+      <!-- ============ LOG ============ -->
+      <section class="view" id="v-log">
+        <div class="head">
+          <div class="htext">
+            <div class="eyebrow">Alert history</div>
+            <h2>Today</h2>
+            <div class="sub">Saved on this phone with the time and a photo. Survives the phone being locked or the app closing.</div>
+          </div>
+          <button class="helpbtn" onclick="App.clearLog()" title="Clear today's log" style="font-size:15px">⌫</button>
+        </div>
+        <div class="pad" id="logList"></div>
+        <div class="spacer"></div>
+      </section>
+
+      <!-- ============ REPORT ============ -->
+      <section class="view" id="v-report">
+        <div class="head">
+          <div class="htext">
+            <div class="eyebrow">End of shift</div>
+            <h2>Safety report</h2>
+            <div class="sub">Downloads a Microsoft Word .docx with the report photos embedded inside the file — ready to send to the client, auditor or insurer.</div>
+          </div>
+        </div>
+
+        <div class="pad">
+          <div class="card">
+            <div class="card-h" style="margin-bottom:0">
+              <div style="flex:1">
+                <h3>Hide identities in the report</h3>
+                <div class="hint-x" style="margin-top:3px;line-height:1.45">
+                  You always see people clearly here on the phone. Only the report you send
+                  out is blurred.
+                </div>
+              </div>
+              <div class="switch on" id="anonSw" onclick="App.toggleAnon()"></div>
+            </div>
+          </div>
+
+          <div class="grid2" style="margin-bottom:11px">
+            <button class="btn sm" onclick="App.exportDoc()">
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              Download DOCX
+            </button>
+            <button class="btn sm ghost" onclick="App.exportCsv()">
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              Spreadsheet
+            </button>
+          </div>
+          <div class="doc" id="doc"></div>
+        </div>
+        <div class="spacer"></div>
+      </section>
+
+    </div>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="home" onclick="App.go('home')">
+        <svg viewBox="0 0 24 24"><path d="M3 10.2l9-7 9 7V20a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1z"/></svg>Site
+      </button>
+      <button class="tab" data-tab="monitor" onclick="App.go('monitor')">
+        <svg viewBox="0 0 24 24"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>Camera
+      </button>
+      <button class="tab" data-tab="log" onclick="App.go('log')">
+        <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L14.7 3.9a2 2 0 00-3.4 0z"/></svg>Alerts
+        <span class="badge" id="tabBadge" style="display:none">0</span>
+      </button>
+      <button class="tab" data-tab="report" onclick="App.go('report')">
+        <svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>Report
+      </button>
+    </nav>
+
+  </div>
+</div>
+
+<script>
+const App = (() => {
+  "use strict";
+
+  const S = {
+    tab:"home", armed:false, source:"camera", model:null, ready:false, drawMode:null,
+    zones:{restricted:null, exit:null},
+    limit:3, sound:true, speak:true, anonymise:true, online:navigator.onLine,
+    cameraFacing:"environment",
+    siteName:"Tower B — Level 4", siteSub:"Sector 12 Construction · Shift 2 of 3",
+    incidents:[], people:0, ms:0,
+    startedAt:null,   // start of the CURRENT watching session (null when stopped)
+    watchedMs:0,      // banked time from previous sessions
+    firstAt:null,     // when watching first began today, for the report header
+    cooldown:{}, streak:{}, stream:null, alarmUntil:0, warnUntil:0, warnAt:0, onbStep:0
+  };
+  const COOLDOWN=5000, CONFIRM=2, MAX_MISS=6;
+  const WARN_COOLDOWN=4500;  // don't nag
+  const PREDICT=45;          // frames ahead (~0.75s) to project a person's path
+  const NEAR=.28;            // only warn once someone is this close to the zone
+  const GRACE=4000;          // a warning followed by a breach inside this = not prevented
+
+  const $ = id => document.getElementById(id);
+  const feed=$("feed"), synth=$("synth"), overlay=$("overlay");
+  const octx=overlay.getContext("2d"), sctx=synth.getContext("2d");
+
+  const ICON={
+    intrusion:'<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+    crowding :'<path d="M16 20v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 00-3-3.9"/>',
+    egress   :'<path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h8"/><path d="M14 3l4 2v14l-4 2z"/>',
+    shield   :'<path d="M12 3l8 3.5V12c0 4.6-3.2 7.9-8 9-4.8-1.1-8-4.4-8-9V6.5z"/>',
+    check    :'<path d="M4 12.5l5 5L20 6.5"/>',
+    warn     :'<path d="M11 5L3 19h16L11 5z"/><path d="M11 10v4M11 17h.01"/><path d="M17 8a5 5 0 013 4"/>'
+  };
+  // Plain-language labels: these appear in the log, the alerts and the report,
+  // so they are written for a site supervisor, not an engineer.
+  const RULES={
+    intrusion:{label:"Danger zone entered", color:"#FF5A5A", icon:ICON.intrusion,
+               say:"Warning. Danger zone entered."},
+    crowding :{label:"Too many people",     color:"#FFB84D", icon:ICON.crowding,
+               say:"Warning. Too many people in this area."},
+    egress   :{label:"Fire exit blocked",   color:"#4DA3FF", icon:ICON.egress,
+               say:"Warning. Fire exit is blocked."}
+  };
+  // A warning is not a violation — it is the system trying to stop one.
+  const WARN={label:"Warning called out", color:"#FFB84D", icon:ICON.warn,
+              say:"Restricted area. Move back."};
+  const svg=(p,c)=>`<svg viewBox="0 0 24 24" style="stroke:${c}">${p}</svg>`;
+  // the site name is typed by the user and gets written into the report HTML
+  const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  /* ---------- persistence ----------
+     A safety log that vanishes when the phone locks is not a record. Zones,
+     settings and the day's alerts survive a reload, a lock, or the app being
+     swiped away — which is the whole point of it being the site's log book.   */
+  const SAVE_KEY="safetyeye_v1", MAX_KEEP=60;
+  let saveTimer=null;
+  function save(){
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(()=>{
+      try{
+        localStorage.setItem(SAVE_KEY, JSON.stringify({
+          zones:S.zones, limit:S.limit, sound:S.sound, speak:S.speak,
+          anonymise:S.anonymise, watchedMs:watched(), firstAt:S.firstAt,
+          siteName:S.siteName, siteSub:S.siteSub,
+          incidents:S.incidents.slice(0,MAX_KEEP), day:new Date().toDateString()
+        }));
+      }catch(e){
+        // out of quota: drop the oldest photos rather than lose the log
+        try{
+          S.incidents=S.incidents.slice(0,20);
+          localStorage.setItem(SAVE_KEY,JSON.stringify({
+            zones:S.zones,limit:S.limit,sound:S.sound,speak:S.speak,
+            anonymise:S.anonymise,watchedMs:watched(),firstAt:S.firstAt,
+            incidents:S.incidents,day:new Date().toDateString()}));
+        }catch(e2){}
+      }
+    },400);
+  }
+  function load(){
+    try{
+      const raw=localStorage.getItem(SAVE_KEY);
+      if(!raw) return;
+      const d=JSON.parse(raw);
+      if(d.day!==new Date().toDateString()) return;   // a shift log is per-day
+      S.zones=d.zones||S.zones;
+      S.limit=d.limit??S.limit;
+      S.sound=d.sound??S.sound;
+      S.speak=d.speak??S.speak;
+      S.anonymise=d.anonymise??S.anonymise;
+      S.watchedMs=d.watchedMs||0;
+      S.firstAt=d.firstAt||null;
+      if(d.siteName!=null) S.siteName=d.siteName;
+      if(d.siteSub!=null)  S.siteSub=d.siteSub;
+      S.startedAt=null;          // a reload is not a watching session
+      S.incidents=Array.isArray(d.incidents)?d.incidents:[];
+    }catch(e){}
+  }
+  function clearLog(){
+    S.incidents=[]; S.watchedMs=0;
+    S.startedAt=S.armed?Date.now():null;
+    S.firstAt=S.startedAt;
+    S.cooldown={}; S.streak={};
+    try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+    save(); renderLog(); renderDoc(); paintStats();
+    toast("Log cleared","Starting a fresh shift",true);
+  }
+
+  /* ---------- phone hardware ---------- */
+  let wakeLock=null;
+  async function keepAwake(on){
+    try{
+      if(on){
+        if("wakeLock" in navigator && !wakeLock){
+          wakeLock=await navigator.wakeLock.request("screen");
+          wakeLock.addEventListener("release",()=>{wakeLock=null});
+        }
+      } else if(wakeLock){ await wakeLock.release(); wakeLock=null; }
+    }catch(e){ wakeLock=null; }
+    $("wakeChip").style.display = (S.armed && wakeLock) ? "inline-flex" : "none";
+  }
+  function buzz(pattern){
+    try{ navigator.vibrate && navigator.vibrate(pattern); }catch(e){}
+  }
+
+  // Time actually spent watching — banked sessions plus the live one. Not wall-clock
+  // since the first start: a stopped detector must not keep accruing monitored time,
+  // because that number goes into a compliance document.
+  const watched=()=>S.watchedMs + (S.armed && S.startedAt ? Date.now()-S.startedAt : 0);
+  const clock=ms=>{const s=Math.floor(ms/1000);return `${two(Math.floor(s/60))}:${two(s%60)}`};
+
+  const two=n=>String(n).padStart(2,"0");
+  const stamp=d=>`${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
+  function tickClock(){const d=new Date();$("clock").textContent=`${d.getHours()%12||12}:${two(d.getMinutes())}`}
+
+  /* ---------- onboarding ---------- */
+  function onbShow(n){
+    S.onbStep=n;
+    document.querySelectorAll(".onb .slide").forEach(s=>s.classList.toggle("on",+s.dataset.s===n));
+    document.querySelectorAll(".onb .dots i").forEach((d,i)=>d.classList.toggle("on",i===n));
+    $("onbNext").textContent = n===2 ? "Get started" : "Next";
+  }
+  function onbNext(){ if(S.onbStep<2) onbShow(S.onbStep+1); else onbClose(); }
+  function onbOpen(){ onbShow(0); $("onb").classList.add("show"); }
+  function onbClose(){
+    $("onb").classList.remove("show");
+    try{ localStorage.setItem("se_onb","1"); }catch(e){}
+  }
+
+  /* ---------- nav ---------- */
+  function go(tab){
+    S.tab=tab;
+    document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="v-"+tab));
+    document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.tab===tab));
+    if(tab==="report") renderDoc();
+    if(tab==="monitor") requestAnimationFrame(fitCanvas);
+  }
+
+  /* ---------- audio + speech ---------- */
+  let actx=null;
+  function beep(f=880){
+    if(!S.sound) return;
+    try{
+      actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+      if(actx.state==="suspended") actx.resume();
+      const o=actx.createOscillator(),g=actx.createGain();
+      o.connect(g);g.connect(actx.destination);o.type="square";o.frequency.value=f;
+      g.gain.setValueAtTime(.0001,actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(.22,actx.currentTime+.01);
+      g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+.26);
+      o.start();o.stop(actx.currentTime+.28);
+    }catch(e){}
+  }
+  function say(t){
+    if(!S.speak||!("speechSynthesis" in window)) return;
+    try{
+      speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(t);
+      u.rate=1.02;u.pitch=.95;speechSynthesis.speak(u);
+    }catch(e){}
+  }
+  function alarm(){
+    if(!S.sound) return;
+    [980,760,980,760,1120].forEach((f,i)=>setTimeout(()=>beep(f),i*170));
+  }
+
+  /* ---------- toast ---------- */
+  let toastTimer=null;
+  function toast(title,sub,ok){
+    $("toastTitle").textContent=title; $("toastSub").textContent=sub;
+    const el=$("toast");
+    el.className="toast show"+(ok?" ok":"");
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>el.classList.remove("show"),2800);
+  }
+
+  /* ---------- connectivity ---------- */
+  function netSync(announce){
+    S.online=navigator.onLine;
+    const c=$("netChip");
+    c.textContent=S.online?"Connected":"Switched off";
+    c.className="chip "+(S.online?"grey":"mint");
+    $("s-net").textContent=S.online?"UNUSED":"OFF";
+    if(announce){
+      if(S.online) toast("Internet back","It was never needed",true);
+      else{
+        toast("Internet off — still watching","Everything runs on this phone",true);
+        say("Internet disconnected. Monitoring continues on this phone.");
+      }
+    }
+  }
+
+  function fitCanvas(){
+    const r=$("stagewrap").getBoundingClientRect();
+    [overlay,synth].forEach(c=>{c.width=Math.round(r.width);c.height=Math.round(r.height)});
+  }
+
+  /* ---------- camera ---------- */
+  async function requestCamera(facing){
+    try{
+      return await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:{exact:facing},width:{ideal:960}},audio:false});
+    }catch(e){
+      // A few browsers expose the camera but reject exact facingMode constraints.
+      if(e.name!=="OverconstrainedError"&&e.name!=="NotFoundError") throw e;
+      return navigator.mediaDevices.getUserMedia({
+        video:{facingMode:{ideal:facing},width:{ideal:960}},audio:false});
+    }
+  }
+  function attachCamera(st,facing){
+    const actual=st.getVideoTracks()[0]?.getSettings?.().facingMode;
+    S.cameraFacing=(actual==="user"||actual==="environment")?actual:facing;
+    S.stream=st; feed.srcObject=st;
+    feed.style.display="block"; synth.style.display="none";
+    syncCameraButton();
+    feed.play().catch(()=>{});
+  }
+  async function startCamera(facing=S.cameraFacing){
+    const previous=S.cameraFacing;
+    stopCamera();
+    try{
+      attachCamera(await requestCamera(facing),facing);
+    }catch(e){
+      // If a camera switch fails, restore the camera that was already working.
+      if(facing!==previous){
+        try{ attachCamera(await requestCamera(previous),previous); }catch(_e){}
+      }
+      throw e;
+    }
+  }
+  function stopCamera(){
+    if(S.stream){S.stream.getTracks().forEach(t=>t.stop());S.stream=null}
+    feed.srcObject=null;
+  }
+
+  // Whatever the supervisor types is what the report is headed with, so it has to
+  // survive a reload and land in the exported document.
+  function bindSiteFields(){
+    [["siteName","siteName"],["siteSub","siteSub"]].forEach(([id,key])=>{
+      const el=$(id);
+      el.value=S[key];
+      el.addEventListener("input",()=>{ S[key]=el.value; save(); });
+      el.addEventListener("blur",()=>{ if(S.tab==="report") renderDoc(); });
+    });
+  }
+
+  async function boot(){
+    load();
+    bindSiteFields();
+    $("limitVal").textContent=S.limit;
+    $("soundSw").classList.toggle("on",S.sound);
+    $("speakSw").classList.toggle("on",S.speak);
+    $("anonSw").classList.toggle("on",S.anonymise);
+    fitCanvas(); renderLog(); renderDoc();
+    try{ if(!localStorage.getItem("se_onb")) $("onb").classList.add("show"); }
+    catch(e){ $("onb").classList.add("show"); }
+    try{
+      S.model=await cocoSsd.load({base:"lite_mobilenet_v2"});
+      S.ready=true;
+      $("loadTitle").textContent="Turning the camera on";
+      $("loadSub").textContent="The picture is read here on the phone and never sent anywhere.";
+      try{ await startCamera(); S.source="camera"; }
+      catch(e){ S.source="sim"; useSim(); }
+      $("loader").classList.add("hide");
+      syncSource(); renderLoop(); detectLoop();
+    }catch(e){
+      $("loadTitle").textContent="Using the demo scene";
+      $("loadSub").textContent="Couldn't load the model, so this is a simulated site — the same rules run on it.";
+      S.source="sim"; useSim(); syncSource();
+      setTimeout(()=>{$("loader").classList.add("hide"); renderLoop();},1400);
+    }
+  }
+
+  /* ---------- simulated scene ---------- */
+  const actors=[{x:.14,y:.52,w:.15,h:.36,vx:.0026},
+                {x:.62,y:.50,w:.14,h:.34,vx:-.0018},
+                {x:.40,y:.55,w:.13,h:.32,vx:.0012}];
+  const crate={x:.70,y:.62,w:.16,h:.16,t:0,vis:false};
+  function useSim(){feed.style.display="none";synth.style.display="block";stopCamera()}
+
+  function simFrame(){
+    const W=synth.width,H=synth.height;
+    sctx.fillStyle="#0C1218";sctx.fillRect(0,0,W,H);
+    sctx.fillStyle="#141C25";sctx.fillRect(0,H*.62,W,H*.38);
+    sctx.strokeStyle="#1C2733";sctx.lineWidth=1;
+    for(let i=1;i<7;i++){const y=H*.62+i*(H*.38/7);
+      sctx.beginPath();sctx.moveTo(0,y);sctx.lineTo(W,y);sctx.stroke()}
+    sctx.fillStyle="#1A232E";sctx.fillRect(W*.05,H*.30,W*.26,H*.32);
+    sctx.fillStyle="#222C39";sctx.fillRect(W*.07,H*.33,W*.22,H*.10);
+    actors.forEach(a=>{
+      a.x+=a.vx; if(a.x<.02||a.x+a.w>.98) a.vx*=-1;
+      const x=a.x*W,y=a.y*H,w=a.w*W,h=a.h*H;
+      sctx.fillStyle="#48606F";
+      sctx.beginPath();sctx.roundRect(x,y,w,h,w*.3);sctx.fill();
+      sctx.beginPath();sctx.arc(x+w/2,y-h*.16,w*.30,0,7);sctx.fill();
+    });
+    crate.t++; crate.vis=(Math.floor(crate.t/420)%2)===1;
+    if(crate.vis){
+      const x=crate.x*W,y=crate.y*H,w=crate.w*W,h=crate.h*H;
+      sctx.fillStyle="#57472C";sctx.fillRect(x,y,w,h);
+      sctx.strokeStyle="#7A6440";sctx.strokeRect(x,y,w,h);
+    }
+    const out=actors.map(a=>({class:"person",score:.93,n:{x:a.x,y:a.y,w:a.w,h:a.h}}));
+    if(crate.vis) out.push({class:"box",score:.81,n:{x:crate.x,y:crate.y,w:crate.w,h:crate.h}});
+    return out;
+  }
+
+  /* ---------- geometry ---------- */
+  function interArea(a,b){
+    const x=Math.max(a.x,b.x),y=Math.max(a.y,b.y);
+    const r=Math.min(a.x+a.w,b.x+b.w),t=Math.min(a.y+a.h,b.y+b.h);
+    return (r<=x||t<=y)?0:(r-x)*(t-y);
+  }
+  function iou(a,b){
+    const i=interArea(a,b);
+    return i ? i/(a.w*a.h + b.w*b.h - i) : 0;
+  }
+  // In the zone if most of the person sits inside it (far away, small box) OR the
+  // person covers much of the zone (close up, box fills the frame).
+  function zoneHit(box,zone){
+    if(!zone) return false;
+    const i=interArea(box,zone);
+    if(!i) return false;
+    return i/((box.w*box.h)||1)>.18 || i/((zone.w*zone.h)||1)>.35;
+  }
+  // shortest distance from a point to a rectangle (0 when inside)
+  function distToRect(px,py,r){
+    const dx=Math.max(r.x-px,0,px-(r.x+r.w));
+    const dy=Math.max(r.y-py,0,py-(r.y+r.h));
+    return Math.hypot(dx,dy);
+  }
+
+  /* ---------- tracking ----------
+     Detection is slow (~40ms) and jumpy; the screen redraws at 60fps. Keeping a
+     tracked list and easing each box toward its latest measurement makes the
+     overlay glide instead of stutter, and stops boxes flickering out for one
+     bad frame.                                                                */
+  let tracks=[];
+  function updateTracks(dets){
+    const used=new Set();
+    tracks.forEach(t=>{
+      let best=-1,bi=0;
+      dets.forEach((d,i)=>{
+        if(used.has(i)||d.class!==t.class) return;
+        const v=iou(d.n,t.target);
+        if(v>bi){bi=v;best=i}
+      });
+      if(best>=0&&bi>.15){
+        used.add(best); t.target={...dets[best].n}; t.score=dets[best].score; t.miss=0;
+      } else t.miss++;
+    });
+    dets.forEach((d,i)=>{
+      if(used.has(i)) return;
+      tracks.push({class:d.class,score:d.score,box:{...d.n},target:{...d.n},miss:0,
+        cx:d.n.x+d.n.w/2, cy:d.n.y+d.n.h/2, vx:0, vy:0, age:0});
+    });
+    tracks=tracks.filter(t=>t.miss<MAX_MISS);
+  }
+  // Ease each box toward its measurement and keep a smoothed velocity, which is
+  // what lets us project where someone is heading before they get there.
+  function easeTracks(amount){
+    tracks.forEach(t=>{
+      ["x","y","w","h"].forEach(k=>{ t.box[k]+=(t.target[k]-t.box[k])*amount; });
+      const cx=t.box.x+t.box.w/2, cy=t.box.y+t.box.h/2;
+      if(t.age>0){
+        t.vx+=((cx-t.cx)-t.vx)*.22;
+        t.vy+=((cy-t.cy)-t.vy)*.22;
+      }
+      t.cx=cx; t.cy=cy; t.age++;
+    });
+  }
+  const liveTracks=()=>tracks.filter(t=>t.miss<3);
+
+  /* ---------- detection (own pace) ---------- */
+  // Runs to a target rate rather than flat out. A monitor is meant to sit on a
+  // wall for a whole shift, so pinning the NPU at 100% would drain the battery
+  // long before the shift ends. It also idles while the screen is off.
+  const TARGET_MS=1000/12;
+  async function detectLoop(){
+    let wait=TARGET_MS;
+    if(document.hidden){
+      wait=600;                             // screen off: stop burning the battery
+    } else if(S.source==="camera" && S.ready && feed.readyState>=2){
+      const t0=performance.now();
+      try{
+        const raw=await S.model.detect(feed,12,.5);
+        const vw=feed.videoWidth||1,vh=feed.videoHeight||1;
+        updateTracks(raw.map(d=>({class:d.class,score:d.score,
+          n:{x:d.bbox[0]/vw,y:d.bbox[1]/vh,w:d.bbox[2]/vw,h:d.bbox[3]/vh}})));
+        S.ms=Math.round(performance.now()-t0);
+      }catch(e){}
+      // full rate while watching, half rate while you're still setting up
+      wait=Math.max(0,(S.armed?TARGET_MS:TARGET_MS*2)-S.ms);
+    }
+    setTimeout(detectLoop,wait);
+  }
+
+  /* ---------- render (60fps) ---------- */
+  function renderLoop(){
+    if(S.source==="sim"){
+      updateTracks(simFrame());   // through the tracker too, so velocity survives
+      easeTracks(.7);
+      S.ms=12;
+    } else easeTracks(.28);
+
+    const live=liveTracks();
+    const people=live.filter(t=>t.class==="person");
+    S.people=people.length;
+    if(S.armed) evaluate(people,live);
+    paint(live);
+    paintStats();
+    requestAnimationFrame(renderLoop);
+  }
+
+  // Everyone else in this category logs the breach after it happens. The whole
+  // point of the device being physically present, with a speaker, is that it can
+  // stop the breach instead. So: project each person forward and call out first.
+  function approaching(people,zone){
+    if(!zone) return null;
+    for(const p of people){
+      if(p.age<12) continue;                       // needs a little motion history
+      if(zoneHit(p.box,zone)) continue;            // already inside: that's a breach
+      const dNow=distToRect(p.cx,p.cy,zone);
+      if(dNow<=0 || dNow>NEAR) continue;           // too far away to be meaningful
+      const dNext=distToRect(p.cx+p.vx*PREDICT, p.cy+p.vy*PREDICT, zone);
+      if(dNext < dNow*.6) return p;                // closing fast on the boundary
+    }
+    return null;
+  }
+
+  function evaluate(people,all){
+    const now=Date.now(),hit={};
+
+    const near=approaching(people,S.zones.restricted);
+    if(near && !S.armedBreachNow && now-S.warnAt>WARN_COOLDOWN){
+      S.warnAt=now; warn(people);
+    }
+    S.warnUntil = near ? now+400 : S.warnUntil;
+
+    if(S.zones.restricted){
+      const who=people.filter(p=>zoneHit(p.box,S.zones.restricted));
+      S.armedBreachNow=who.length>0;
+      if(who.length) hit.intrusion=`${who.length} ${who.length>1?"people":"person"} in the danger zone`;
+    } else S.armedBreachNow=false;
+    if(people.length>S.limit) hit.crowding=`${people.length} people here · limit is ${S.limit}`;
+    if(S.zones.exit){
+      const obj=all.filter(t=>t.class!=="person"&&zoneHit(t.box,S.zones.exit));
+      if(obj.length) hit.egress=`A ${obj[0].class} is blocking the fire exit`;
+    }
+    Object.keys(RULES).forEach(k=>{
+      if(hit[k]){
+        S.streak[k]=(S.streak[k]||0)+1;
+        if(S.streak[k]>=CONFIRM && now-(S.cooldown[k]||0)>COOLDOWN){
+          S.cooldown[k]=now; record(k,hit[k],people);
+        }
+      } else S.streak[k]=0;
+    });
+  }
+
+  /* ---------- snapshot ---------- */
+  const SNAP=140;
+  // Two frames per alert: the clear one for the supervisor on this phone, and an
+  // anonymised one for the report that goes outside.
+  //
+  // The detector gives a person box, not a face box. Blurring a guessed "head
+  // slice" of that box failed badly at close range — the band landed on hair while
+  // the face stayed readable. So we blur the whole person instead: no guessing
+  // about where a head sits, and it is the stronger privacy claim anyway. The
+  // scene still reads (where they were, what they were near); the individual does not.
+  function snapshot(people){
+    try{
+      const sim=S.source==="sim", src=sim?synth:feed;
+      const sw=sim?synth.width:(feed.videoWidth||1);
+      const sh=sim?synth.height:(feed.videoHeight||1);
+      const side=Math.min(sw,sh),ox=(sw-side)/2,oy=(sh-side)/2,k=SNAP/side;
+
+      const c=document.createElement("canvas");c.width=c.height=SNAP;
+      const x=c.getContext("2d");
+      x.drawImage(src,ox,oy,side,side,0,0,SNAP,SNAP);
+      const raw=c.toDataURL("image/jpeg",.72);
+      // Blur the whole frame, not just the detected people. Masking only the
+      // detections meant anonymity depended on the detector succeeding — and it
+      // misses constantly: a hand across the face, someone turned away, poor light.
+      // One missed detection is an identifiable worker in a document sent to a
+      // client. Blurring everything cannot fail, and the photo still evidences
+      // where and when the rule was broken.
+      const b=document.createElement("canvas");b.width=b.height=SNAP;
+      const bx=b.getContext("2d");
+      bx.filter="blur(9px)"; bx.drawImage(c,0,0);
+      return {raw, anon:b.toDataURL("image/jpeg",.72)};
+    }catch(e){ return {raw:"",anon:""}; }
+  }
+
+  // A called-out warning. Logged as its own kind so the report can show how many
+  // breaches never happened — the number no forensic system can report.
+  function warn(people){
+    const d=new Date(), shot=snapshot(people);
+    S.incidents.unshift({id:S.incidents.length+1,kind:"warn",type:"warn",
+      detail:"Someone was heading for the danger zone",
+      time:stamp(d),date:d.toLocaleDateString("en-IN"),
+      t:Date.now(),prevented:true,thumb:shot.raw,anon:shot.anon});
+    const f=$("flash");
+    f.classList.add("warn","on");
+    setTimeout(()=>{f.classList.remove("on");setTimeout(()=>f.classList.remove("warn"),260)},600);
+    alarm();
+    buzz([140,70,140,70,220]);
+    say(WARN.say);
+    toast("Restricted area","Move back from the marked zone",true);
+    renderLog(); paintStats(); save();
+  }
+
+  function record(type,detail,people){
+    const d=new Date(), shot=snapshot(people);
+    // any warning still inside its grace window didn't work — mark it honestly
+    if(type==="intrusion"){
+      S.incidents.forEach(i=>{
+        if(i.kind==="warn" && i.prevented && Date.now()-i.t < GRACE) i.prevented=false;
+      });
+    }
+    S.incidents.unshift({id:S.incidents.length+1,kind:"breach",type,detail,time:stamp(d),
+      date:d.toLocaleDateString("en-IN"),thumb:shot.raw,anon:shot.anon});
+    S.alarmUntil=Date.now()+1300;
+    $("flash").classList.add("on");
+    setTimeout(()=>$("flash").classList.remove("on"),700);
+    beep(type==="intrusion"?920:type==="crowding"?700:540);
+    buzz([160,70,160]);
+    say(RULES[type].say);
+    toast(RULES[type].label,`${detail} · ${stamp(d)}`);
+    renderLog(); paintStats(); save();
+  }
+
+  /* ---------- painting ---------- */
+  function paint(live){
+    const W=overlay.width,H=overlay.height;
+    octx.clearRect(0,0,W,H);
+
+    const zone=(z,color,label)=>{
+      if(!z) return;
+      octx.save();
+      octx.strokeStyle=color;octx.lineWidth=2;octx.setLineDash([7,5]);
+      octx.strokeRect(z.x*W,z.y*H,z.w*W,z.h*H);
+      octx.setLineDash([]);
+      octx.fillStyle=color+"1F";octx.fillRect(z.x*W,z.y*H,z.w*W,z.h*H);
+      octx.font="700 9px Inter,system-ui";
+      const tw=octx.measureText(label).width+9;
+      const lx=Math.max(0,Math.min(z.x*W,W-tw));
+      const ly=z.y*H>15?z.y*H-13:z.y*H;
+      octx.fillStyle=color;octx.fillRect(lx,ly,tw,13);
+      octx.fillStyle="#04070A";octx.fillText(label,lx+4.5,ly+9.5);
+      octx.restore();
+    };
+    zone(S.zones.restricted,"#FF5A5A","DANGER ZONE");
+    zone(S.zones.exit,"#4DA3FF","FIRE EXIT");
+
+    live.forEach(t=>{
+      const isP=t.class==="person";
+      const inZ=isP?zoneHit(t.box,S.zones.restricted):zoneHit(t.box,S.zones.exit);
+      const col=inZ?(isP?"#FF5A5A":"#4DA3FF"):(isP?"#00E5A0":"#7C8B9B");
+      const x=t.box.x*W,y=t.box.y*H,w=t.box.w*W,h=t.box.h*H;
+      octx.globalAlpha=t.miss?Math.max(.25,1-t.miss/MAX_MISS):1;
+
+      octx.strokeStyle=col;octx.lineWidth=inZ?2.4:1.5;
+      octx.strokeRect(x,y,w,h);
+      const c=Math.min(13,w*.28,h*.28);
+      octx.lineWidth=inZ?3:2.2;octx.beginPath();
+      octx.moveTo(x,y+c);octx.lineTo(x,y);octx.lineTo(x+c,y);
+      octx.moveTo(x+w-c,y);octx.lineTo(x+w,y);octx.lineTo(x+w,y+c);
+      octx.moveTo(x,y+h-c);octx.lineTo(x,y+h);octx.lineTo(x+c,y+h);
+      octx.moveTo(x+w-c,y+h);octx.lineTo(x+w,y+h);octx.lineTo(x+w,y+h-c);
+      octx.stroke();
+
+      const tag=`${t.class} ${(t.score*100)|0}%`;
+      octx.font="600 9.5px Inter,system-ui";
+      const tw=octx.measureText(tag).width+9;
+      const tx=Math.max(0,Math.min(x,W-tw)), ty=y>15?y-13:y+h;
+      octx.fillStyle=col;octx.fillRect(tx,ty,tw,13);
+      octx.fillStyle="#04070A";octx.fillText(tag,tx+4.5,ty+9.5);
+      octx.globalAlpha=1;
+    });
+
+    if(drag.active){
+      const z=norm(drag);
+      octx.strokeStyle=drag.kind==="restricted"?"#FF5A5A":"#4DA3FF";
+      octx.lineWidth=2;octx.setLineDash([5,4]);
+      octx.strokeRect(z.x*W,z.y*H,z.w*W,z.h*H);
+      octx.setLineDash([]);
+    }
+  }
+
+  /* number changes pop rather than snap */
+  function setNum(el,val){
+    if(el.textContent===String(val)) return;
+    el.textContent=val;
+    el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump");
+  }
+
+  const breaches=()=>S.incidents.filter(i=>i.kind!=="warn");
+  const warnings=()=>S.incidents.filter(i=>i.kind==="warn");
+  function preventedPct(){
+    const w=warnings();
+    if(!w.length) return null;
+    return Math.round(w.filter(i=>i.prevented).length/w.length*100);
+  }
+
+  function paintStats(){
+    const nb=breaches().length, nw=warnings().length;
+    $("s-people").textContent=S.people;
+    $("s-inc").textContent=nb;
+    $("s-warn").textContent=nw;
+    $("s-ms").textContent=S.ms?S.ms+"ms":"—";
+    setNum($("h-inc"),nb);
+    setNum($("h-warn"),nw);
+    const pct=preventedPct();
+    $("h-prev").textContent = pct===null ? "—" : pct+"%";
+    $("prevCard").style.display = nw ? "block" : "none";
+    $("p-warn").textContent=nw;
+    $("p-brch").textContent=nb;
+    $("p-pct").textContent = pct===null ? "—" : pct+"%";
+    setNum($("h-people"),S.armed?S.people:"—");
+    $("h-mode").textContent=S.armed?"ON":"OFF";
+    $("h-up").textContent=clock(watched());
+
+    $("t-inc").className="tile"+(nb?" hot":"");
+    $("t-mode").className="tile"+(S.armed?" live":"");
+    $("t-people").className="tile"+(S.armed&&S.people>S.limit?" hot":"");
+
+    const on=(S.zones.restricted?1:0)+1+(S.zones.exit?1:0);
+    $("h-armed").textContent=`${on} of 3 on`;
+    $("h-armed").className="chip "+(on>1?"mint":"grey");
+    $("r-1").textContent=S.zones.restricted?"On":"Set up";
+    $("r-1").className="chip "+(S.zones.restricted?"red":"grey");
+    $("r-3").textContent=S.zones.exit?"On":"Set up";
+    $("r-3").className="chip "+(S.zones.exit?"blue":"grey");
+    $("r-2").textContent=`Max ${S.limit}`;
+
+    const now=Date.now();
+    const alarm=now<S.alarmUntil, warning=!alarm && now<S.warnUntil;
+    const hs=$("hudState");
+    hs.className="hud-pill "+(S.armed?(alarm?"alarm":warning?"idle":"armed"):"idle");
+    hs.innerHTML=S.armed
+      ? (alarm ?'<span class="dot"></span> Breach'
+        : warning?'<span class="dot pulse"></span> Approaching'
+                 :'<span class="dot pulse"></span> Watching')
+      : '<span class="dot pulse"></span> Not started';
+    $("m-eyebrow").innerHTML=S.armed
+      ? '<span class="dot pulse"></span> Watching now'
+      : '<span class="dot"></span> Not watching yet';
+
+    // guided 3-step strip
+    const zoneSet=!!(S.zones.restricted||S.zones.exit);
+    const done=[zoneSet,S.armed,S.incidents.length>0];
+    const first=done.indexOf(false);
+    [1,2,3].forEach(i=>{
+      const el=$("stp"+i), d=done[i-1];
+      el.className="stp"+(d?" done":(first===i-1?" now":""));
+      $("stp"+i+"n").innerHTML = d
+        ? `<svg viewBox="0 0 24 24">${ICON.check}</svg>` : i;
+    });
+
+    const b=$("tabBadge");
+    if(S.incidents.length){b.style.display="grid";b.textContent=S.incidents.length}
+    else b.style.display="none";
+  }
+
+  function renderLog(){
+    const el=$("logList");
+    if(!S.incidents.length){
+      el.innerHTML=`<div class="empty">
+        <div class="ico"><svg viewBox="0 0 24 24">${ICON.shield}</svg></div>
+        <b>Nothing has happened yet</b>
+        <small>That's the good outcome. Anything the camera catches will show up here straight away.</small>
+        <button class="btn ghost" style="max-width:200px;margin:0 auto" onclick="App.go('monitor')">Open the camera</button>
+      </div>`;
+      return;
+    }
+    el.innerHTML=S.incidents.map(i=>{
+      const w=i.kind==="warn", r=w?WARN:RULES[i.type];
+      const tail=w
+        ? (i.prevented
+            ? `<span style="color:var(--mint)">Nobody crossed the line</span>`
+            : `<span style="color:var(--red)">They crossed anyway</span>`)
+        : "";
+      return `<div class="inc"${w?' style="opacity:.94"':''}>
+        <div class="bar" style="background:${r.color}"></div>
+        ${i.thumb?`<img src="${i.thumb}" alt="">`:""}
+        <div class="body">
+          <div class="t" style="color:${r.color}">${svg(r.icon,r.color)}${r.label}</div>
+          <div class="d">${i.detail}${tail?" · "+tail:""}</div>
+          <div class="m">${i.date} · ${i.time}</div>
+        </div></div>`;
+    }).join("");
+  }
+
+  /* ---------- report ---------- */
+  function docHtml(){
+    const counts={};
+    Object.keys(RULES).forEach(k=>counts[k]=S.incidents.filter(i=>i.type===k).length);
+    const total=watched();
+    const mins=total?Math.max(1,Math.round(total/60000)):0;
+    const started=S.firstAt?stamp(new Date(S.firstAt)):"—";
+    const pic=i=>S.anonymise?(i.anon||i.thumb):i.thumb;
+    const nb=breaches().length, nw=warnings().length, pct=preventedPct();
+    const rows=S.incidents.length
+      ? [...S.incidents].reverse().map((i,n)=>{
+          const w=i.kind==="warn", r=w?WARN:RULES[i.type];
+          return `<tr>
+          <td>${n+1}</td><td style="font-variant-numeric:tabular-nums">${i.time}</td>
+          <td><b>${r.label}</b>${w?' <span style="color:#B8860B">(warning)</span>':''}<br>
+              <span style="color:#7A8593">${i.detail}${w?(i.prevented?" — nobody crossed":" — they crossed anyway"):""}</span></td>
+          <td>${pic(i)?`<img src="${pic(i)}">`:"—"}</td></tr>`}).join("")
+      : `<tr><td colspan="4" style="text-align:center;color:#8B95A1;padding:18px">
+           Nothing was flagged during this shift.</td></tr>`;
+    return `
+      <div class="brandrow">
+        <div class="m"><svg viewBox="0 0 24 24"><path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <b>SafetyEye · Automatic safety record</b>
+      </div>
+      <h1>Shift Safety Report</h1>
+      <div class="sub">${esc(S.siteName)||"Unnamed area"}${S.siteSub?" · "+esc(S.siteSub):""} · ${new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"})}</div>
+      <h2>Prevention</h2>
+      <div class="kv"><span>Warnings called out before a breach</span><b>${nw}</b></div>
+      <div class="kv"><span>Breaches that still happened</span><b>${nb}</b></div>
+      <div class="kv"><span><b>Incidents prevented</b></span><b>${pct===null?"—":pct+"%"}</b></div>
+
+      <h2>Summary</h2>
+      <div class="kv"><span>Watching began</span><b>${started}</b></div>
+      <div class="kv"><span>Time actually monitored</span><b>${mins} min</b></div>
+      <div class="kv"><span>Danger zone entered</span><b>${counts.intrusion}</b></div>
+      <div class="kv"><span>Too many people</span><b>${counts.crowding}</b></div>
+      <div class="kv"><span>Fire exit blocked</span><b>${counts.egress}</b></div>
+      <div class="kv"><span>Safe number of people</span><b>${S.limit}</b></div>
+      <h2>What happened</h2>
+      <table><thead><tr><th>#</th><th>Time</th><th>What</th><th>Photo</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <div class="sig">
+        Made automatically by SafetyEye on ${new Date().toLocaleString("en-IN")}.<br>
+        The camera was read on the phone itself. No video was sent anywhere or saved;
+        only the photos above were kept.<br>
+        ${S.anonymise
+          ? "People in these photos have been blurred on the phone itself, so no individual can be identified from this document. The unblurred originals never leave the supervisor's phone and can be provided if an incident is formally investigated."
+          : "<b>People in these photos are not blurred and can be identified.</b> Treat this document as personal data."}
+        <br><br>
+        <b>Reviewed and attested by the site supervisor</b><br><br>
+        Name: _____________________________ &nbsp;&nbsp;
+        Designation: __________________<br><br>
+        Signature: _________________________ &nbsp;&nbsp;
+        Date: ______________
+      </div>`;
+  }
+  function renderDoc(){ $("doc").innerHTML=docHtml(); }
+
+  function download(name,mime,content){
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([content],{type:mime}));
+    a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},400);
+  }
+  const docxEsc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
+  const docxText=(s,bold=false)=>`<w:r>${bold?"<w:rPr><w:b/></w:rPr>":""}<w:t xml:space="preserve">${docxEsc(s)}</w:t></w:r>`;
+  const docxP=(s="",style="",bold=false)=>`<w:p>${style?`<w:pPr><w:pStyle w:val="${style}"/></w:pPr>`:""}${s===""?"":docxText(s,bold)}</w:p>`;
+  const docxCell=(content,width,header=false)=>`<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${header?'<w:shd w:fill="F4F6F8"/>':""}</w:tcPr>${content}</w:tc>`;
+  const docxTable=(rows,widths)=>`<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblLayout w:type="fixed"/><w:tblBorders>
+    <w:top w:val="single" w:sz="4" w:color="D9DEE4"/><w:left w:val="single" w:sz="4" w:color="D9DEE4"/>
+    <w:bottom w:val="single" w:sz="4" w:color="D9DEE4"/><w:right w:val="single" w:sz="4" w:color="D9DEE4"/>
+    <w:insideH w:val="single" w:sz="4" w:color="E8EBEF"/><w:insideV w:val="single" w:sz="4" w:color="E8EBEF"/>
+  </w:tblBorders></w:tblPr><w:tblGrid>${widths.map(w=>`<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>${rows.map((row,ri)=>`<w:tr>${row.map((cell,ci)=>docxCell(cell,widths[ci]||1800,ri===0)).join("")}</w:tr>`).join("")}</w:tbl>`;
+  const docxImageP=(rid,name,n)=>`<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">
+    <wp:extent cx="914400" cy="914400"/><wp:docPr id="${n}" name="${docxEsc(name)}"/>
+    <wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>
+    <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>
+      <pic:nvPicPr><pic:cNvPr id="${n}" name="${docxEsc(name)}"/><pic:cNvPicPr/></pic:nvPicPr>
+      <pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+      <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+    </pic:pic></a:graphicData></a:graphic>
+  </wp:inline></w:drawing></w:r></w:p>`;
+  const docxBytes=(src)=>{
+    const m=String(src||"").match(/^data:([^;]+);base64,(.*)$/);
+    if(!m) return null;
+    try{
+      const raw=atob(m[2]), bytes=new Uint8Array(raw.length);
+      for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
+      return {type:m[1],bytes};
+    }catch(e){return null}
+  };
+  const joinBytes=(...parts)=>{
+    const size=parts.reduce((n,p)=>n+p.length,0), out=new Uint8Array(size);let at=0;
+    parts.forEach(p=>{out.set(p,at);at+=p.length});return out;
+  };
+  const zipU16=n=>{const b=new Uint8Array(2);new DataView(b.buffer).setUint16(0,n,true);return b};
+  const zipU32=n=>{const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,n>>>0,true);return b};
+  function zipCrc32(bytes){
+    let c=0xFFFFFFFF;
+    for(const byte of bytes){c^=byte;for(let i=0;i<8;i++)c=(c>>>1)^((c&1)?0xEDB88320:0)}
+    return (c^0xFFFFFFFF)>>>0;
+  }
+  function zipStored(entries){
+    const local=[],central=[];let offset=0;
+    entries.forEach(entry=>{
+      const name=new TextEncoder().encode(entry.name),data=entry.data,crc=zipCrc32(data);
+      const lh=joinBytes(zipU32(0x04034B50),zipU16(20),zipU16(0),zipU16(0),zipU16(0),zipU16(0),zipU32(crc),zipU32(data.length),zipU32(data.length),zipU16(name.length),zipU16(0),name,data);
+      const ch=joinBytes(zipU32(0x02014B50),zipU16(20),zipU16(20),zipU16(0),zipU16(0),zipU16(0),zipU16(0),zipU32(crc),zipU32(data.length),zipU32(data.length),zipU16(name.length),zipU16(0),zipU16(0),zipU16(0),zipU16(0),zipU32(0),zipU32(offset),name);
+      local.push(lh);central.push(ch);offset+=lh.length;
+    });
+    const cd=joinBytes(...central),body=joinBytes(...local),eocd=joinBytes(zipU32(0x06054B50),zipU16(0),zipU16(0),zipU16(entries.length),zipU16(entries.length),zipU32(cd.length),zipU32(body.length),zipU16(0));
+    return joinBytes(body,cd,eocd);
+  }
+  const docxStyles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr></w:style>
+      <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>
+      <w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:rPr><w:color w:val="6B7683"/><w:sz w:val="20"/></w:rPr></w:style>
+      <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="260" w:after="100"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:color w:val="59636F"/><w:sz w:val="20"/></w:rPr></w:style>
+    </w:styles>`;
+  function exportDoc(){
+    const photos=[];
+    const addPhoto=src=>{
+      const image=docxBytes(src);if(!image) return null;
+      const n=photos.length+1,ext=image.type==="image/png"?"png":"jpeg";
+      const ref={rid:`rIdImage${n}`,filename:`image${n}.${ext}`,num:n,type:image.type,bytes:image.bytes};
+      photos.push(ref);return ref;
+    };
+    const counts={};Object.keys(RULES).forEach(k=>counts[k]=S.incidents.filter(i=>i.type===k).length);
+    const total=watched(),mins=total?Math.max(1,Math.round(total/60000)):0;
+    const started=S.firstAt?stamp(new Date(S.firstAt)):"—",nb=breaches().length,nw=warnings().length,pct=preventedPct();
+    const picture=i=>S.anonymise?(i.anon||i.thumb):i.thumb;
+    const keyRows=[
+      ["Warnings called out before a breach",String(nw)],
+      ["Breaches that still happened",String(nb)],
+      ["Incidents prevented",pct===null?"—":pct+"%"],
+      ["Watching began",started],
+      ["Time actually monitored",mins+" min"],
+      ["Danger zone entered",String(counts.intrusion)],
+      ["Too many people",String(counts.crowding)],
+      ["Fire exit blocked",String(counts.egress)],
+      ["Safe number of people",String(S.limit)]
+    ].map(row=>[docxP(row[0]),docxP(row[1],"",true)]);
+    const incidents=[...S.incidents].reverse();
+    const requestedPhotos=incidents.filter(i=>picture(i)).length;
+    const incidentRows=incidents.length?incidents.map((i,n)=>{
+      const warning=i.kind==="warn",rule=warning?WARN:RULES[i.type],ref=addPhoto(picture(i));
+      const detail=i.detail+(warning?" · "+(i.prevented?"Nobody crossed the line":"They crossed anyway"):"");
+      return [docxP(String(n+1)),docxP(i.time),docxP((rule?rule.label:i.type)+(warning?" (warning)":""),"",true)+docxP(detail),ref?docxImageP(ref.rid,ref.filename,ref.num):docxP("—")];
+    }):[[docxP("—"),docxP("—"),docxP("Nothing was flagged during this shift."),docxP("—")]];
+    const privacy=S.anonymise
+      ? "People in these photos have been blurred on the phone itself, so no individual can be identified from this document."
+      : "People in these photos are not blurred and can be identified. Treat this document as personal data.";
+    const documentXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+        <w:body>
+          ${docxP("SafetyEye · Automatic safety record","Subtitle")}
+          ${docxP("Shift Safety Report","Title")}
+          ${docxP(`${S.siteName||"Unnamed area"}${S.siteSub?" · "+S.siteSub:""} · ${new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"})}`)}
+          ${docxP("Prevention","Heading2")}
+          ${docxTable(keyRows.slice(0,3),[7000,2000])}
+          ${docxP("Summary","Heading2")}
+          ${docxTable(keyRows.slice(3),[7000,2000])}
+          ${docxP("What happened","Heading2")}
+          ${docxTable([[docxP("#","",true),docxP("Time","",true),docxP("What","",true),docxP("Photo","",true)],...incidentRows],[700,1400,5000,1900])}
+          ${docxP("Made automatically by SafetyEye on "+new Date().toLocaleString("en-IN")+".")}
+          ${docxP("The camera was read on the phone itself. No video was sent anywhere or saved; only the photos above were kept.")}
+          ${docxP(privacy)}
+          ${docxP("Reviewed and attested by the site supervisor","Heading2")}
+          ${docxP("Name: _____________________________    Designation: __________________")}
+          ${docxP("Signature: _________________________    Date: ______________")}
+          <w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="360" w:footer="360" w:gutter="0"/></w:sectPr>
+        </w:body>
+      </w:document>`;
+    const imageTypes=[...new Set(photos.map(p=>p.type))];
+    const contentTypes=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
+        ${imageTypes.map(type=>`<Default Extension="${type==="image/png"?"png":"jpeg"}" ContentType="${type}"/>`).join("")}
+        <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+        <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+        <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+        <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+      </Types>`;
+    const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+      <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+      <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+    </Relationships>`;
+    const docRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      <Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+      ${photos.map(p=>`<Relationship Id="${p.rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${p.filename}"/>`).join("")}
+    </Relationships>`;
+    const now=new Date().toISOString();
+    const core=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>SafetyEye Shift Safety Report</dc:title><dc:creator>SafetyEye</dc:creator><dcterms:created xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="dcterms:W3CDTF">${now}</dcterms:created></cp:coreProperties>`;
+    const app=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>SafetyEye</Application></Properties>`;
+    const utf8=s=>new TextEncoder().encode(s);
+    const entries=[
+      {name:"[Content_Types].xml",data:utf8(contentTypes)},
+      {name:"_rels/.rels",data:utf8(rootRels)},
+      {name:"word/document.xml",data:utf8(documentXml)},
+      {name:"word/styles.xml",data:utf8(docxStyles)},
+      {name:"word/_rels/document.xml.rels",data:utf8(docRels)},
+      {name:"docProps/core.xml",data:utf8(core)},
+      {name:"docProps/app.xml",data:utf8(app)},
+      ...photos.map(p=>({name:"word/media/"+p.filename,data:p.bytes}))
+    ];
+    if(photos.length!==requestedPhotos){
+      const missing=requestedPhotos-photos.length;
+      toast("Report not saved",`${missing} photo${missing===1?"":"s"} could not be embedded`,false);
+      return;
+    }
+    const filename=`SafetyEye_Report_DOCX_${Date.now()}.docx`;
+    download(filename,"application/vnd.openxmlformats-officedocument.wordprocessingml.document",zipStored(entries));
+    toast("DOCX saved",`${photos.length} photo${photos.length===1?"":"s"} embedded in the Word file`,true);
+  }
+  function exportCsv(){
+    const rows=[["#","Date","Time","What happened","Detail"]]
+      .concat([...S.incidents].reverse().map((i,n)=>
+        [n+1,i.date,i.time,RULES[i.type].label,i.detail]));
+    download(`SafetyEye_Alerts_${Date.now()}.csv`,"text/csv",
+      rows.map(r=>r.map(c=>`"${c}"`).join(",")).join("\n"));
+    toast("Spreadsheet saved","Alert list exported",true);
+  }
+
+  /* ---------- zone drawing ---------- */
+  const drag={active:false,kind:null,x0:0,y0:0,x1:0,y1:0};
+  function norm(d){
+    const W=overlay.width,H=overlay.height;
+    return {x:Math.min(d.x0,d.x1)/W,y:Math.min(d.y0,d.y1)/H,
+            w:Math.abs(d.x1-d.x0)/W,h:Math.abs(d.y1-d.y0)/H};
+  }
+  overlay.addEventListener("pointerdown",e=>{
+    if(!S.drawMode) return;
+    const r=overlay.getBoundingClientRect();
+    drag.active=true;drag.kind=S.drawMode;
+    drag.x0=drag.x1=e.clientX-r.left;drag.y0=drag.y1=e.clientY-r.top;
+    overlay.setPointerCapture(e.pointerId);
+  });
+  overlay.addEventListener("pointermove",e=>{
+    if(!drag.active) return;
+    const r=overlay.getBoundingClientRect();
+    drag.x1=e.clientX-r.left;drag.y1=e.clientY-r.top;
+  });
+  overlay.addEventListener("pointerup",()=>{
+    if(!drag.active) return;
+    const z=norm(drag);
+    if(z.w>.05&&z.h>.05){
+      S.zones[drag.kind]=z; save();
+      toast(drag.kind==="restricted"?"Danger zone set":"Fire exit set",
+            "Now tap Start watching",true);
+    }
+    drag.active=false;S.drawMode=null;
+    document.querySelectorAll(".tool").forEach(t=>t.classList.remove("on"));
+    $("drawHint").style.display="none";
+    paintStats();
+  });
+
+  /* ---------- controls ---------- */
+  function draw(kind){
+    S.drawMode=S.drawMode===kind?null:kind;
+    document.querySelectorAll(".tool").forEach(t=>
+      t.classList.toggle("on",t.dataset.zone===S.drawMode));
+    $("drawHint").style.display=S.drawMode?"flex":"none";
+    $("drawHintText").textContent=S.drawMode==="restricted"
+      ? "Drag a box on the picture around the area people must stay out of."
+      : "Drag a box on the picture around the doorway that must stay clear.";
+  }
+  function setRule(kind){
+    go("monitor");S.drawMode=null;
+    setTimeout(()=>{fitCanvas();draw(kind)},60);
+  }
+  function clearZones(){
+    S.zones={restricted:null,exit:null};S.drawMode=null;
+    document.querySelectorAll(".tool").forEach(t=>t.classList.remove("on"));
+    $("drawHint").style.display="none";paintStats();save();
+  }
+  function toggleArm(){
+    S.armed=!S.armed;
+    keepAwake(S.armed);
+    if(S.armed){
+      S.startedAt=Date.now();
+      S.firstAt=S.firstAt||S.startedAt;
+      beep(1046); say("Now watching.");
+    } else if(S.startedAt){
+      S.watchedMs+=Date.now()-S.startedAt;   // bank the session, stop the clock
+      S.startedAt=null;
+    }
+    save();
+    const b=$("armBtn");
+    b.className="btn"+(S.armed?" danger":"");
+    b.innerHTML=S.armed
+      ? '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> Stop watching'
+      : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 9l5 3-5 3z"/></svg> Start watching';
+    paintStats();
+  }
+  async function flipCamera(){
+    const next=S.cameraFacing==="user"?"environment":"user";
+    const b=$("camBtn");
+    if(b){b.disabled=true;b.textContent="Switching camera…"}
+    try{
+      await startCamera(next);
+      S.source="camera";tracks=[];syncSource();
+      toast(next==="user"?"Front camera":"Back camera","Live camera switched",true);
+    }catch(e){
+      syncSource();
+      toast("Camera switch failed","That camera is unavailable or permission was denied",false);
+    }finally{
+      if(b)b.disabled=false;
+      syncCameraButton();
+    }
+  }
+  async function toggleSource(){
+    if(S.source==="camera"){S.source="sim";useSim()}
+    else{
+      try{await startCamera();S.source="camera";tracks=[]}
+      catch(e){toast("No camera available","Staying on the demo scene");return}
+    }
+    syncSource();
+  }
+  function syncSource(){
+    const sim=S.source==="sim";
+    $("srcBtn").textContent=sim?"Use the live camera":"Use the demo scene instead";
+    $("hudSrc").textContent=sim?"Demo scene":(S.cameraFacing==="user"?"Front camera":"Back camera");
+    feed.style.display=sim?"none":"block";
+    synth.style.display=sim?"block":"none";
+  }
+  function syncCameraButton(){
+    const b=$("camBtn");
+    if(!b) return;
+    const next=S.cameraFacing==="user"?"environment":"user";
+    const label=next==="user"?"Front camera":"Back camera";
+    b.innerHTML='<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14.6-4L3 9"/><path d="M3 4v5h5M4 13a8 8 0 0014.6 4L21 15"/><path d="M21 20v-5h-5"/></svg>'+label;
+    b.setAttribute("aria-label","Switch to "+label.toLowerCase());
+  }
+  function limit(d){
+    S.limit=Math.max(1,Math.min(12,S.limit+d));
+    $("limitVal").textContent=S.limit;paintStats();save();
+  }
+  function toggleSound(){S.sound=!S.sound;$("soundSw").classList.toggle("on",S.sound);save()}
+  function toggleSpeak(){
+    S.speak=!S.speak;$("speakSw").classList.toggle("on",S.speak);save();
+    if(S.speak) say("Spoken warnings are on.");
+    else if("speechSynthesis" in window) speechSynthesis.cancel();
+  }
+  function toggleAnon(){
+    S.anonymise=!S.anonymise;
+    $("anonSw").classList.toggle("on",S.anonymise);
+    renderDoc(); save();
+    toast(S.anonymise?"Identities hidden":"Identities visible",
+          S.anonymise?"In the report you send out":"The report will contain personal data",
+          S.anonymise);
+  }
+
+  tickClock();setInterval(tickClock,10000);
+  setInterval(()=>{if(S.armed)paintStats()},1000);
+  window.addEventListener("resize",fitCanvas);
+  window.addEventListener("online",()=>netSync(true));
+  window.addEventListener("offline",()=>netSync(true));
+  // the OS drops the wake lock whenever the app goes to the background
+  document.addEventListener("visibilitychange",()=>{
+    if(!document.hidden && S.armed) keepAwake(true);
+  });
+  window.addEventListener("pagehide",save);
+  netSync(false);onbShow(0);renderDoc();boot();
+
+  return {go,draw,setRule,clearZones,toggleArm,flipCamera,toggleSource,limit,
+          toggleSound,toggleSpeak,toggleAnon,exportDoc,exportCsv,
+          onbNext,onbOpen,onbClose,clearLog};
+})();
+</script>
+</body>
+</html>
