@@ -1,132 +1,79 @@
 # Phone setup — Termux + llama.cpp + Qwen on the iQOO 15
 
-Manasa's runbook. Follow top to bottom. Target: `llama-server` answering `curl` on
-`127.0.0.1:8080` **before 16:30**. If it isn't, stop and switch to WebLLM.
+Manasa's runbook. Status as of 29 Aug 12:22 IST: **Termux, llama-server and the 3B
+model are all on the phone.** Steps 0–3 are done. Start at step 4.
 
 ---
 
-## 0. Install Termux (5 min)
+## 0. Install Termux — DONE
 
-**Do NOT use the Play Store version.** It is deprecated and will fail.
+From GitHub releases, arm64-v8a APK. Not the Play Store build.
 
-Open Chrome on the phone → https://github.com/termux/termux-app/releases
-Download the newest **`termux-app_v*+apt-android-7-github-debug_arm64-v8a.apk`**
-(the iQOO 15 is arm64). Allow "install unknown apps" when prompted. Open Termux.
-
----
-
-## 1. Base packages (5 min)
+## 1. Base packages — DONE
 
 ```bash
 pkg update -y && pkg upgrade -y
-pkg install -y git cmake make clang wget curl python binutils
+pkg install -y git cmake make clang
+pkg install -y wget curl python binutils
 termux-setup-storage
 termux-wake-lock
 ```
 
-`termux-setup-storage` pops an Android permission dialog — tap Allow.
-`termux-wake-lock` stops Android killing the server mid-demo. **Run it every time
-you restart Termux.**
-
----
-
-## 2. Start the model download FIRST (runs ~20–40 min in background)
-
-Downloads are the long pole and the venue Wi-Fi only gets worse. Start this before
-you build anything.
+## 2. Models — 3B DONE, grab the 1.5B fallback when convenient
 
 ```bash
 mkdir -p ~/models && cd ~/models
-
-# primary — ~1.9 GB
 wget -c https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf
-
-# fallback — ~1.1 GB, use if 3B is too slow in the demo
 wget -c https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
 ```
 
-`-c` means resume — if the Wi-Fi drops, re-run the same command, it picks up.
+Shorten the names so you stop typing them:
 
-**Leave this session running.** Open a second session to keep working:
-swipe in from the **left edge** of the screen → **NEW SESSION**.
+```bash
+cd ~/models
+mv Qwen2.5-3B-Instruct-Q4_K_M.gguf qwen3b.gguf
+mv Qwen2.5-1.5B-Instruct-Q4_K_M.gguf qwen15b.gguf
+```
+
+## 3. llama-server — DONE, installed as a package
+
+**Do not build llama.cpp from source on this phone.** clang 21 hits an internal
+compiler error on `ggml-cpu/arch/arm/repack.cpp` (`ggml_gemm_q8_0_4x8_q8_0`).
+Two attempts failed. The prebuilt Termux package works and took six seconds:
+
+```bash
+pkg install -y llama-cpp
+llama-server --version
+```
 
 ---
 
-## 3. Build llama.cpp (15–40 min, in the second session)
-
-```bash
-cd ~
-git clone https://github.com/ggml-org/llama.cpp
-cd llama.cpp
-cmake -B build -DGGML_OPENMP=OFF
-cmake --build build --config Release -j $(nproc)
-```
-
-`-DGGML_OPENMP=OFF` avoids the most common Termux build failure. Compiling is slow
-and the phone will get warm — that is normal.
-
-When it finishes:
-
-```bash
-ls -lh ~/llama.cpp/build/bin/llama-server
-```
-
-You should see the file. If you do, the hard part is over.
-
----
-
-## 4. Check the download finished
-
-```bash
-ls -lh ~/models
-```
-
-Expect roughly `1.9G` for the 3B and `1.1G` for the 1.5B. If a file is much smaller,
-the download is incomplete — re-run the `wget -c` command.
-
----
-
-## 5. First run — the moment of truth
+## 4. Run the server
 
 ```bash
 mkdir -p ~/safetyeye/app
 echo "<h1>SafetyEye</h1>" > ~/safetyeye/app/index.html
-
-~/llama.cpp/build/bin/llama-server \
-  -m ~/models/Qwen2.5-3B-Instruct-Q4_K_M.gguf \
-  --path ~/safetyeye/app \
-  --host 127.0.0.1 --port 8080 \
-  -c 4096 -t 4
+cd ~
+llama-server -m models/qwen3b.gguf --path safetyeye/app --port 8080 -c 4096 -t 4
 ```
 
-Wait for the log line that says the server is listening. **Leave it running.**
+`llama-server` binds `127.0.0.1` by default, which is what we want — the app and the
+model share an origin, so no CORS, no mixed content, and the camera is allowed.
 
-New session (swipe from left → NEW SESSION), then:
+Wait for the line saying the server is listening. **Leave this session running.**
+
+## 5. Prove it answers
+
+Swipe from the **left edge** → **NEW SESSION**, then:
 
 ```bash
-curl -s http://127.0.0.1:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Reply with one word: working"}]}'
+curl -s localhost:8080/v1/chat/completions -H "Content-Type: application/json" -d '{"messages":[{"role":"user","content":"Reply with one word: working"}]}'
 ```
 
-A JSON blob with the model's reply = **done**. Tick the boxes in `NOW.md`.
+A JSON blob containing the model's reply means the whole architecture is proven.
 
-Then open Chrome on the phone → `http://127.0.0.1:8080/` → you should see the
-"SafetyEye" heading. That proves the app and the model share one origin, which is
-what makes the camera work with no CORS and no certificate.
-
----
-
-## If something breaks
-
-| Symptom | Fix |
-|---|---|
-| Build dies with an openmp error | `pkg install -y libopenmp`, then rebuild |
-| Build dies out of memory | drop the `-j $(nproc)` to `-j 2` |
-| `wget` 404s | the HF filename changed — open the repo page in Chrome and copy the exact `.gguf` link |
-| Server starts then dies when screen locks | you forgot `termux-wake-lock` |
-| Model loads but replies take >5s | switch the `-m` path to the 1.5B file |
-| Nothing works by **16:30** | stop. Switch to WebLLM. Do not keep fighting it. |
+Then open Chrome on the phone at **http://127.0.0.1:8080/** — you should see the
+"SafetyEye" heading served by the same process that just answered the model call.
 
 ---
 
@@ -134,6 +81,18 @@ what makes the camera work with no CORS and no certificate.
 
 ```bash
 termux-wake-lock
-~/llama.cpp/build/bin/llama-server -m ~/models/Qwen2.5-3B-Instruct-Q4_K_M.gguf \
-  --path ~/safetyeye/app --host 127.0.0.1 --port 8080 -c 4096 -t 4
+cd ~
+llama-server -m models/qwen3b.gguf --path safetyeye/app --port 8080 -c 4096 -t 4
 ```
+
+Without `termux-wake-lock`, Android kills the server when the screen locks.
+
+## If something breaks
+
+| Symptom | Fix |
+|---|---|
+| Server dies when the screen locks | you forgot `termux-wake-lock` |
+| Replies take longer than ~5s | swap `-m models/qwen3b.gguf` for `models/qwen15b.gguf` |
+| Port already in use | `pkill llama-server` then start again |
+| `wget` 404s | filename changed on HF — open the repo page in Chrome, copy the exact link |
+| Nothing works by **16:30** | stop. Switch to WebLLM. Do not keep digging. |
