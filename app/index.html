@@ -2,98 +2,180 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SafetyEye</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <meta name="theme-color" content="#0d1117">
-  <link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0b0e13">
+<link rel="apple-touch-icon" href="./icon-192.png">
 <style>
-  html, body { margin: 0; height: 100%; background: #111; color: #eee; font-family: sans-serif; }
-  #stage { position: relative; width: 100vw; height: 100vh; }
-  video, canvas { touch-action: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-  #status { position: absolute; top: 8px; left: 8px; z-index: 10; background: rgba(0,0,0,0.6); padding: 6px 10px; border-radius: 6px; font-size: 14px; }
-  #zoneForm {
-    position: absolute; z-index: 20; background: #1c1c1c; border: 1px solid #444;
-    border-radius: 8px; padding: 10px; font-size: 13px; display: none;
+  :root {
+    --bg:#0b0e13; --panel:rgba(14,18,25,.92); --line:rgba(255,255,255,.12);
+    --text:#e8edf4; --dim:#8b97a8;
+    --amber:#f0ad2a; --green:#35d07f; --red:#ff4d4d; --blue:#5aa9ff;
+    --pad:12px;
   }
-  #zoneForm label { display: block; margin-top: 6px; }
-  #zoneForm input, #zoneForm select { width: 160px; box-sizing: border-box; }
-  #zoneForm button { margin-top: 8px; margin-right: 6px; }
-  #drawZoneBtn {
-    position: absolute; top: 8px; right: 8px; z-index: 10;
-    background: #00ff88; color: #111; border: none; padding: 6px 12px;
-    border-radius: 6px; font-weight: bold; cursor: pointer;
+  * { -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin:0; height:100%; background:var(--bg); color:var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior:none;
   }
-  #testLlmBtn {
-    position: absolute; top: 44px; right: 8px; z-index: 10;
-    background: #55aaff; color: #111; border: none; padding: 6px 12px;
-    border-radius: 6px; font-weight: bold; cursor: pointer;
+  #stage { position:relative; width:100vw; height:100dvh; overflow:hidden; }
+  video, canvas {
+    touch-action:none; position:absolute; inset:0;
+    width:100%; height:100%; object-fit:cover;
   }
-  #ruleBar {
-    position: absolute; top: 80px; right: 8px; z-index: 10;
-    display: flex; gap: 4px; align-items: flex-start;
+
+  /* ---------- top bar ---------- */
+  #topbar {
+    position:absolute; top:0; left:0; right:0; z-index:20;
+    padding: calc(env(safe-area-inset-top) + 8px) var(--pad) 10px;
+    background: linear-gradient(180deg, rgba(11,14,19,.92), rgba(11,14,19,.6) 62%, transparent);
+    display:flex; flex-direction:column; gap:6px; pointer-events:none;
   }
-  #ruleInput { width: 200px; padding: 4px; }
-  #speakRuleBtn, #submitRuleBtn {
-    padding: 4px 8px; cursor: pointer;
+  #topline { display:flex; align-items:center; gap:8px; }
+  #brand { font-weight:700; font-size:15px; }
+  #brand span { color:var(--amber); }
+  #status {
+    font-size:12px; color:var(--dim); background:rgba(0,0,0,.45);
+    border:1px solid var(--line); padding:3px 8px; border-radius:999px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:50vw;
   }
-  #ruleJsonPreview {
-    position: absolute; top: 112px; right: 8px; z-index: 10;
-    max-width: 260px; background: rgba(0,0,0,0.7); color: #9f9;
-    font-family: monospace; font-size: 11px; padding: 6px; border-radius: 6px;
-    white-space: pre-wrap; display: none;
+  #offline {
+    margin-left:auto; font-size:10px; font-weight:700; letter-spacing:.6px;
+    color:var(--green); border:1px solid rgba(53,208,127,.45);
+    background:rgba(53,208,127,.12); padding:3px 7px; border-radius:999px;
   }
-  #reportBtn {
-    position: absolute; bottom: 8px; right: 8px; z-index: 10;
-    background: #ff8800; color: #111; border: none; padding: 8px 14px;
-    border-radius: 6px; font-weight: bold; cursor: pointer;
-  }
-  #reportOverlay {
-    position: absolute; inset: 0; z-index: 30; background: rgba(0,0,0,0.9);
-    color: #eee; padding: 20px; overflow-y: auto; display: none;
-  }
-  #reportOverlay table { color: #eee; }
-  #reportOverlay th, #reportOverlay td { padding: 4px 8px; border-bottom: 1px solid #444; }
-  #reportCloseBtn {
-    position: absolute; top: 12px; right: 12px; padding: 6px 12px; cursor: pointer;
-  }
+  #tally { font-size:12px; color:var(--dim); }
+  #tally b { color:var(--text); font-variant-numeric:tabular-nums; }
+  #tally b.pct { color:var(--green); }
+  #tally .sep { opacity:.4; margin:0 2px; }
+
+  /* ---------- alerts ---------- */
   #alertBanner {
-    position: absolute; bottom: 8px; left: 8px; right: 8px; z-index: 10;
-    max-height: 30%; overflow-y: auto; font-size: 13px;
+    position:absolute; left:var(--pad); right:var(--pad); top:92px; z-index:25;
+    display:flex; flex-direction:column; gap:6px; pointer-events:none;
   }
   .alert-warn, .alert-breach {
-    padding: 4px 8px; margin-top: 4px; border-radius: 6px; color: #111;
+    padding:11px 14px; border-radius:10px; font-size:15px; font-weight:600;
+    line-height:1.3; box-shadow:0 6px 20px rgba(0,0,0,.45);
+    animation: pop .18s ease-out;
   }
-  .alert-warn { background: #ffcc00; }
-  .alert-breach { background: #ff4444; color: #fff; }
+  @keyframes pop { from { transform:translateY(-6px); opacity:0 } to { transform:none; opacity:1 } }
+  .alert-warn   { background:var(--amber); color:#1a1206; }
+  .alert-breach { background:var(--red);   color:#fff; }
+
+  /* ---------- bottom dock ---------- */
+  #dock {
+    position:absolute; left:0; right:0; bottom:0; z-index:20;
+    background:var(--panel); backdrop-filter: blur(14px);
+    border-top:1px solid var(--line);
+    padding:10px var(--pad) calc(env(safe-area-inset-bottom) + 10px);
+    display:flex; flex-direction:column; gap:9px;
+  }
+  #ruleBar { display:flex; gap:7px; align-items:stretch; }
+  #ruleInput {
+    flex:1; min-width:0; background:#161b24; color:var(--text);
+    border:1px solid var(--line); border-radius:9px; padding:11px 12px;
+    font-size:15px; font-family:inherit;
+  }
+  #ruleInput::placeholder { color:#5f6b7c; }
+  #ruleInput:focus { outline:none; border-color:var(--amber); }
+  button {
+    font-family:inherit; font-size:14px; font-weight:600; border:none;
+    border-radius:9px; cursor:pointer; padding:11px 13px;
+  }
+  #speakRuleBtn { background:#202834; color:var(--text); font-size:17px; min-width:46px; }
+  #submitRuleBtn { background:var(--amber); color:#1a1206; }
+  #btnRow { display:flex; gap:7px; }
+  #btnRow button { flex:1; }
+  #drawZoneBtn { background:#202834; color:var(--text); }
+  #drawZoneBtn.active { background:var(--green); color:#04180e; }
+  #testLlmBtn { background:#202834; color:var(--blue); }
+  #reportBtn { background:#202834; color:var(--amber); }
+
+  /* ---------- compiled rule ---------- */
+  #ruleJsonPreview {
+    position:absolute; left:var(--pad); right:var(--pad); bottom:136px; z-index:26;
+    max-height:40vh; overflow:auto; background:rgba(6,9,13,.95);
+    border:1px solid rgba(240,173,42,.35); color:#9ee6b4;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px;
+    line-height:1.45; padding:12px 13px; border-radius:11px;
+    white-space:pre-wrap; display:none; box-shadow:0 10px 30px rgba(0,0,0,.5);
+  }
+
+  /* ---------- zone form ---------- */
+  #zoneForm {
+    position:absolute; z-index:40; left:50%; top:50%;
+    transform:translate(-50%,-50%); width:min(320px, calc(100vw - 32px));
+    background:#121722; border:1px solid var(--line); border-radius:14px;
+    padding:16px; display:none; box-shadow:0 18px 50px rgba(0,0,0,.6);
+  }
+  #zoneForm h3 { margin:0 0 10px; font-size:15px; }
+  #zoneForm label { display:block; margin-top:10px; font-size:12px; color:var(--dim); }
+  #zoneForm input, #zoneForm select {
+    width:100%; box-sizing:border-box; margin-top:4px;
+    background:#0d1119; color:var(--text); border:1px solid var(--line);
+    border-radius:8px; padding:10px; font-size:15px; font-family:inherit;
+  }
+  #zoneFormBtns { display:flex; gap:8px; margin-top:16px; }
+  #zoneFormBtns button { flex:1; }
+  #zoneSaveBtn { background:var(--green); color:#04180e; }
+  #zoneCancelBtn { background:#202834; color:var(--text); }
+
+  /* ---------- report ---------- */
+  #reportOverlay {
+    position:absolute; inset:0; z-index:50; background:#0b0e13;
+    padding: calc(env(safe-area-inset-top) + 52px) 18px calc(env(safe-area-inset-bottom) + 20px);
+    overflow-y:auto; display:none; line-height:1.6; font-size:15px;
+  }
+  #reportOverlay h1, #reportOverlay h2 { font-size:17px; margin:0 0 10px; }
+  #reportOverlay table { width:100%; border-collapse:collapse; margin:12px 0; font-size:14px; }
+  #reportOverlay th { text-align:left; color:var(--dim); font-weight:600; }
+  #reportOverlay th, #reportOverlay td { padding:8px 6px; border-bottom:1px solid var(--line); }
+  #reportOverlay img { border-radius:8px; margin:8px 0; max-width:100%; }
+  #reportCloseBtn {
+    position:absolute; top:calc(env(safe-area-inset-top) + 10px); right:14px;
+    background:#202834; color:var(--text); z-index:2;
+  }
 </style>
 </head>
 <body>
   <div id="stage">
     <video id="camera" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
-    <div id="status">starting…</div>
-    <button id="drawZoneBtn">Draw Zone</button>
-    <button id="testLlmBtn">Test AI Brain</button>
-    <div id="ruleBar">
-      <input id="ruleInput" placeholder="e.g. keep people away from the press" />
-      <button id="speakRuleBtn" title="Speak the rule instead of typing">🎤</button>
-      <button id="submitRuleBtn">Submit Rule</button>
-    </div>
-    <div id="ruleJsonPreview"></div>
-    <div id="alertBanner"></div>
-    <button id="reportBtn">Shift Report</button>
 
-    <div id="reportOverlay">
-      <button id="reportCloseBtn">Close</button>
-      <div id="reportContent"></div>
+    <div id="topbar">
+      <div id="topline">
+        <div id="brand">Safety<span>Eye</span></div>
+        <div id="status">starting…</div>
+        <div id="offline">ON-DEVICE</div>
+      </div>
+      <div id="tally"><b>0</b> warned <span class="sep">·</span> <b>0</b> breached <span class="sep">·</span> <b class="pct">0%</b> prevented</div>
+    </div>
+
+    <div id="alertBanner"></div>
+    <div id="ruleJsonPreview"></div>
+
+    <div id="dock">
+      <div id="ruleBar">
+        <input id="ruleInput" placeholder="Say a safety rule…" />
+        <button id="speakRuleBtn" title="Speak the rule instead of typing">🎤</button>
+        <button id="submitRuleBtn">Add</button>
+      </div>
+      <div id="btnRow">
+        <button id="drawZoneBtn">Draw Zone</button>
+        <button id="testLlmBtn">Test Model</button>
+        <button id="reportBtn">Shift Report</button>
+      </div>
     </div>
 
     <div id="zoneForm">
-      <label>Name <input id="zoneName" placeholder="press"></label>
+      <h3>Name this zone</h3>
+      <label>Zone name <input id="zoneName" placeholder="press"></label>
       <label>Rule type
         <select id="zoneType">
-          <option value="zone_intrusion">zone_intrusion</option>
+          <option value="zone_intrusion">zone intrusion</option>
           <option value="occupancy">occupancy</option>
           <option value="obstruction">obstruction</option>
           <option value="proximity">proximity</option>
@@ -106,11 +188,16 @@
           <option value="critical">critical</option>
         </select>
       </label>
-      <label>Say <input id="zoneSay" placeholder="Step back from the press"></label>
-      <div>
-        <button id="zoneSaveBtn">Add</button>
+      <label>Spoken warning <input id="zoneSay" placeholder="Step back from the press"></label>
+      <div id="zoneFormBtns">
+        <button id="zoneSaveBtn">Add rule</button>
         <button id="zoneCancelBtn">Cancel</button>
       </div>
+    </div>
+
+    <div id="reportOverlay">
+      <button id="reportCloseBtn">Close</button>
+      <div id="reportContent"></div>
     </div>
   </div>
 

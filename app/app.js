@@ -16,11 +16,27 @@ function setStatus(msg) {
 const ALERT_COOLDOWN_MS = 2000;
 const lastAlertAt = new Map(); // key -> timestamp, so a standing violation doesn't spam every frame
 
+const tally = { warn: 0, breach: 0 };
+
+function renderTally() {
+  const total = tally.warn + tally.breach;
+  const pct = total ? Math.round((tally.warn / total) * 100) : 0;
+  const el = document.getElementById('tally');
+  if (!el) return;
+  el.innerHTML =
+    `<b>${tally.warn}</b> warned <span class="sep">·</span> ` +
+    `<b>${tally.breach}</b> breached <span class="sep">·</span> ` +
+    `<b class="pct">${pct}%</b> prevented`;
+}
+
 function showAlert(event) {
   const key = `${event.rule.zone}:${event.rule.type}:${event.status}`;
   const now = performance.now();
   if (now - (lastAlertAt.get(key) || 0) < ALERT_COOLDOWN_MS) return false;
   lastAlertAt.set(key, now);
+
+  if (event.status === 'breach') tally.breach += 1; else tally.warn += 1;
+  renderTally();
 
   const div = document.createElement('div');
   div.className = event.status === 'breach' ? 'alert-breach' : 'alert-warn';
@@ -49,6 +65,7 @@ function canvasPoint(evt) {
 
 drawZoneBtn.addEventListener('click', () => {
   drawingZone = true;
+  drawZoneBtn.classList.add('active');
   setStatus('draw mode: drag a box on the video to mark a zone');
 });
 
@@ -80,12 +97,11 @@ canvas.addEventListener('pointerup', (evt) => {
   dragStart = null;
   dragCurrent = null;
   drawingZone = false;
+  drawZoneBtn.classList.remove('active');
   if (rect.w < 10 || rect.h < 10) return; // ignore accidental taps
 
   pendingRect = rect;
   zoneForm.style.display = 'block';
-  zoneForm.style.left = Math.min(evt.clientX, window.innerWidth - 200) + 'px';
-  zoneForm.style.top = Math.min(evt.clientY, window.innerHeight - 220) + 'px';
 });
 
 document.getElementById('zoneSaveBtn').addEventListener('click', () => {
@@ -223,6 +239,7 @@ async function startCamera() {
   await new Promise((resolve) => (video.onloadedmetadata = resolve));
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
+  ruleEngine.setFrameSize(canvas.width, canvas.height);
 }
 
 function drawZones() {

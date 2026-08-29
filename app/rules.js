@@ -12,10 +12,30 @@ function distance([ax, ay], [bx, by]) {
   return Math.hypot(ax - bx, ay - by);
 }
 
+// Shortest distance from a point to a rectangle (0 when inside). Distance to the
+// zone's centre is the wrong measure — a wide zone would let you stand on its edge
+// and still be counted as "far away".
+function distanceToRect([px, py], r) {
+  const dx = Math.max(r.x - px, 0, px - (r.x + r.w));
+  const dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+  return Math.hypot(dx, dy);
+}
+
 class RuleEngine {
   constructor() {
     this.zones = new Map(); // name -> rect
     this.rules = [];
+    this.proximityMarginPx = 140; // replaced once the frame size is known
+  }
+
+  // A proximity rule means "do not get close to this". Close has to be in pixels,
+  // but the model gives us `limit` in metres or people — it cannot know the camera's
+  // scale, and we have no calibration to convert one to the other. So the margin is
+  // derived from the frame instead: ~12% of the diagonal, which on a propped phone
+  // is roughly an arm's length at working distance. Honest, and stable across
+  // resolutions.
+  setFrameSize(w, h) {
+    if (w > 0 && h > 0) this.proximityMarginPx = Math.hypot(w, h) * 0.12;
   }
 
   setZone(name, rect) {
@@ -80,14 +100,16 @@ class RuleEngine {
       }
 
       if (rule.type === 'proximity') {
-        // limit = minimum allowed distance (px) from the zone's center point.
-        const zoneCenter = [zoneRect.x + zoneRect.w / 2, zoneRect.y + zoneRect.h / 2];
+        // Measured to the zone's edge, not its centre. `rule.limit` is deliberately
+        // ignored here — see setFrameSize().
+        const margin = this.proximityMarginPx;
         for (const t of tracks) {
-          const currentDist = distance(t.center, zoneCenter);
-          const predictedDist = distance(t.predictedCenter, zoneCenter);
-          if (currentDist < rule.limit) {
+          if (t.class !== 'person') continue; // a mouse is not approaching anything
+          const currentDist = distanceToRect(t.center, zoneRect);
+          const predictedDist = distanceToRect(t.predictedCenter, zoneRect);
+          if (currentDist < margin) {
             events.push({ status: 'breach', rule, trackIds: [t.id], say: rule.say });
-          } else if (predictedDist < rule.limit) {
+          } else if (predictedDist < margin) {
             events.push({ status: 'warn', rule, trackIds: [t.id], say: rule.say });
           }
         }
@@ -98,4 +120,4 @@ class RuleEngine {
   }
 }
 
-window.SafetyEyeRules = { RuleEngine, pointInRect, distance };
+window.SafetyEyeRules = { RuleEngine, pointInRect, distance, distanceToRect };
