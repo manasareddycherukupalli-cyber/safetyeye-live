@@ -6,7 +6,7 @@
 //   2. Model calls are NEVER cached. /v1/*, /completion and /health go straight to
 //      llama-server. A cached model reply would be a demo that lies.
 
-const CACHE = 'safetyeye-v1';
+const CACHE = 'safetyeye-v2';
 
 const SHELL = [
   './',
@@ -75,16 +75,26 @@ self.addEventListener('fetch', event => {
     return; // straight to the network, untouched
   }
 
+  // Network-first, cache as fallback.
+  //
+  // The "network" here is llama-server on 127.0.0.1 — same device, always fast, so
+  // going to it first costs nothing and guarantees a `git pull` is actually visible
+  // on the next reload. Cache-first cost us an afternoon of debugging stale code.
+  //
+  // The cache is still fully populated, so aeroplane mode works exactly as before:
+  // when the fetch fails, we serve what we stored.
   event.respondWith((async () => {
-    const hit = await caches.match(event.request);
-    if (hit) return hit;
     try {
       const res = await fetch(event.request);
       if (res.ok) (await caches.open(CACHE)).put(event.request, res.clone());
       return res;
     } catch (e) {
-      const shell = await caches.match('./index.html');
-      if (shell && event.request.mode === 'navigate') return shell;
+      const hit = await caches.match(event.request);
+      if (hit) return hit;
+      if (event.request.mode === 'navigate') {
+        const shell = await caches.match('./index.html');
+        if (shell) return shell;
+      }
       throw e;
     }
   })());
