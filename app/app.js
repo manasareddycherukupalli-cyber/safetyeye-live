@@ -20,39 +20,48 @@ async function startCamera() {
   canvas.height = video.videoHeight;
 }
 
-async function loadModel() {
-  setStatus('loading vision model (local, no CDN)…');
-  return cocoSsd.load({
-    base: 'lite_mobilenet_v2',
-    modelUrl: '../vendor/coco-ssd/model/model.json',
-  });
-}
-
-function drawDetections(detections) {
+function drawTracks(tracks) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.lineWidth = 2;
   ctx.font = '16px sans-serif';
-  for (const d of detections) {
-    const [x, y, w, h] = d.bbox;
+  for (const t of tracks) {
+    const [x, y, w, h] = t.bbox;
+
     ctx.strokeStyle = '#00ff88';
     ctx.strokeRect(x, y, w, h);
     ctx.fillStyle = '#00ff88';
-    ctx.fillText(`${d.class} ${(d.score * 100).toFixed(0)}%`, x + 4, y > 16 ? y - 4 : y + 16);
+    ctx.fillText(`#${t.id} ${t.class} ${(t.score * 100).toFixed(0)}%`, x + 4, y > 16 ? y - 4 : y + 16);
+
+    // predicted position ~0.75s ahead, drawn as a dot + connecting line
+    const [cx, cy] = t.center;
+    const [px, py] = t.predictedCenter;
+    ctx.strokeStyle = '#ffcc00';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(px, py);
+    ctx.stroke();
+    ctx.fillStyle = '#ffcc00';
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
-async function detectLoop(model) {
+async function detectLoop(model, tracker) {
   const detections = await model.detect(video);
-  drawDetections(detections);
-  requestAnimationFrame(() => detectLoop(model));
+  const tracks = tracker.update(detections, performance.now());
+  drawTracks(tracks);
+  requestAnimationFrame(() => detectLoop(model, tracker));
 }
 
 async function main() {
   try {
     await startCamera();
-    const model = await loadModel();
+    setStatus('loading vision model (local, no CDN)…');
+    const model = await SafetyEyeVision.loadVisionModel();
+    const tracker = new SafetyEyeVision.Tracker();
     setStatus('running');
-    detectLoop(model);
+    detectLoop(model, tracker);
   } catch (err) {
     setStatus('error: ' + err.message);
     console.error(err);
