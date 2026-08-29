@@ -19,7 +19,7 @@ const lastAlertAt = new Map(); // key -> timestamp, so a standing violation does
 function showAlert(event) {
   const key = `${event.rule.zone}:${event.rule.type}:${event.status}`;
   const now = performance.now();
-  if (now - (lastAlertAt.get(key) || 0) < ALERT_COOLDOWN_MS) return;
+  if (now - (lastAlertAt.get(key) || 0) < ALERT_COOLDOWN_MS) return false;
   lastAlertAt.set(key, now);
 
   const div = document.createElement('div');
@@ -29,6 +29,7 @@ function showAlert(event) {
   setTimeout(() => div.remove(), 4000);
 
   speakWarning(event.say);
+  return true;
 }
 
 // --- Zone drawing: click-drag on the canvas to define a rectangle, then a
@@ -251,10 +252,45 @@ async function detectLoop(model, tracker) {
   drawTracks(tracks);
 
   const events = ruleEngine.evaluate(tracks);
-  for (const event of events) showAlert(event);
+  for (const event of events) {
+    const fired = showAlert(event);
+    if (fired) logSafetyEvent(event);
+  }
 
   requestAnimationFrame(() => detectLoop(model, tracker));
 }
+
+// Only logged events (i.e. ones that passed the cooldown and were actually
+// shown/spoken) go into the report — otherwise a standing violation would
+// write dozens of rows a second. Breach events get a blurred snapshot
+// attached; warnings don't need one.
+async function logSafetyEvent(event) {
+  const record = { status: event.status, rule: event.rule };
+  if (event.status === 'breach') {
+    record.snapshot = SafetyEyeReport.captureBlurredFrame(video);
+  }
+  try {
+    await SafetyEyeLog.logEvent(record);
+  } catch (err) {
+    console.error('[SafetyEye] failed to log event', err);
+  }
+}
+
+// --- Task 8: end-of-shift report, on-device, breach frames blurred.
+const reportBtn = document.getElementById('reportBtn');
+const reportOverlay = document.getElementById('reportOverlay');
+const reportContent = document.getElementById('reportContent');
+
+reportBtn.addEventListener('click', async () => {
+  const events = await SafetyEyeLog.getEvents();
+  const summary = SafetyEyeReport.summarize(events);
+  reportContent.innerHTML = SafetyEyeReport.renderReportHtml(summary);
+  reportOverlay.style.display = 'block';
+});
+
+document.getElementById('reportCloseBtn').addEventListener('click', () => {
+  reportOverlay.style.display = 'none';
+});
 
 async function main() {
   try {

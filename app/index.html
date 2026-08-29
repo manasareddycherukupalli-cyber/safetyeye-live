@@ -40,6 +40,20 @@
     font-family: monospace; font-size: 11px; padding: 6px; border-radius: 6px;
     white-space: pre-wrap; display: none;
   }
+  #reportBtn {
+    position: absolute; bottom: 8px; right: 8px; z-index: 10;
+    background: #ff8800; color: #111; border: none; padding: 8px 14px;
+    border-radius: 6px; font-weight: bold; cursor: pointer;
+  }
+  #reportOverlay {
+    position: absolute; inset: 0; z-index: 30; background: rgba(0,0,0,0.9);
+    color: #eee; padding: 20px; overflow-y: auto; display: none;
+  }
+  #reportOverlay table { color: #eee; }
+  #reportOverlay th, #reportOverlay td { padding: 4px 8px; border-bottom: 1px solid #444; }
+  #reportCloseBtn {
+    position: absolute; top: 12px; right: 12px; padding: 6px 12px; cursor: pointer;
+  }
   #alertBanner {
     position: absolute; bottom: 8px; left: 8px; right: 8px; z-index: 10;
     max-height: 30%; overflow-y: auto; font-size: 13px;
@@ -65,6 +79,12 @@
     </div>
     <div id="ruleJsonPreview"></div>
     <div id="alertBanner"></div>
+    <button id="reportBtn">Shift Report</button>
+
+    <div id="reportOverlay">
+      <button id="reportCloseBtn">Close</button>
+      <div id="reportContent"></div>
+    </div>
 
     <div id="zoneForm">
       <label>Name <input id="zoneName" placeholder="press"></label>
@@ -96,6 +116,8 @@
   <script src="vision.js"></script>
   <script src="rules.js"></script>
   <script src="llm.js"></script>
+  <script src="log.js"></script>
+  <script src="report.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
