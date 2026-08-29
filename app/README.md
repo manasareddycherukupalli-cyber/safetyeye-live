@@ -29,7 +29,7 @@ That's it. `sw.js` already lists `./index.html` in its precache list.
 ```js
 const model = await cocoSsd.load({
   base: 'lite_mobilenet_v2',
-  modelUrl: '../vendor/coco-ssd/model.json'
+  modelUrl: './vendor/coco-ssd/model.json'
 });
 ```
 

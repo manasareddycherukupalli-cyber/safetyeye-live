@@ -9,7 +9,7 @@ const VELOCITY_SMOOTHING = 0.5; // 0 = ignore new sample, 1 = no smoothing
 async function loadVisionModel() {
   return cocoSsd.load({
     base: 'lite_mobilenet_v2',
-    modelUrl: '../vendor/coco-ssd/model/model.json',
+    modelUrl: 'vendor/coco-ssd/model.json',
   });
 }
 
