@@ -19,8 +19,10 @@ only what is inside `app/`, so `../vendor/...` pointed above the document root a
 would have 404'd the first time this ran for real. These are the live paths:
 
 ```js
-cocoSsd.load({ base: 'lite_mobilenet_v2',
-               modelUrl: './vendor/coco-ssd/model/model.json' });
+const model = await cocoSsd.load({
+  base: 'lite_mobilenet_v2',
+  modelUrl: './vendor/coco-ssd/model.json'
+});
 ```
 
 Without `modelUrl` the library silently fetches from storage.googleapis.com and the
