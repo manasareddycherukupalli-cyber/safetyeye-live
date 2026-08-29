@@ -387,6 +387,11 @@
     .screen { width: 100vw; height: 100vh; min-height: 0; border-radius: 0; box-shadow: none; }
     .glare, .notch { display: none; }
   }
+
+  /* alert text: the instruction first, the bookkeeping small and underneath */
+  .a-say { font-size: 16px; font-weight: 700; line-height: 1.25; }
+  .a-meta { font-size: 11px; font-weight: 600; opacity: .72; margin-top: 3px;
+            letter-spacing: .02em; }
 </style>
 </head>
 <body>
@@ -532,7 +537,7 @@
 
   <div id="zoneForm">
     <input id="zoneName">
-    <select id="zoneType"><option value="zone_intrusion">zone_intrusion</option><option value="occupancy">occupancy</option><option value="obstruction">obstruction</option><option value="proximity">proximity</option></select>
+    <select id="zoneType"><option value="zone_intrusion">Keep out - nobody enters</option><option value="proximity">Stay back - do not get close</option><option value="occupancy">Crowd limit - too many people</option><option value="obstruction">Keep clear - nothing left blocking</option></select>
     <input id="zoneLimit" type="number" value="1">
     <select id="zoneSeverity"><option value="warn">warn</option><option value="critical">critical</option></select>
     <input id="zoneSay">

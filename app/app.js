@@ -105,7 +105,7 @@ function paintStats() {
 
 $('armBtn').addEventListener('click', () => {
   appState.armed = !appState.armed;
-  setStatus(appState.armed ? 'watching for rule breaches' : 'watching paused');
+  setStatus(appState.armed ? 'watching' : 'paused');
   if (appState.armed) speakWarning('Now watching.');
 });
 
@@ -125,6 +125,20 @@ function renderTally() {
     `<b class="pct">${pct}%</b> prevented`;
 }
 
+
+// The rule types are the schema's vocabulary, not the supervisor's. A foreman
+// reading this screen on a noisy site should never have to decode
+// "zone_intrusion". The values below stay exactly as they are in the schema,
+// the rule engine and the model's output — only the words on screen change.
+const RULE_WORDS = {
+  zone_intrusion: { label: 'Keep out',      blurb: 'Warn anyone who steps into this area.' },
+  occupancy:      { label: 'Crowd limit',   blurb: 'Warn when too many people are inside.' },
+  obstruction:    { label: 'Keep clear',    blurb: 'Warn when anything is left blocking this.' },
+  proximity:      { label: 'Stay back',     blurb: 'Warn anyone getting too close to this.' },
+};
+const ruleLabel = (type) => (RULE_WORDS[type] || {}).label || type;
+
+
 function showAlert(event) {
   const key = `${event.rule.zone}:${event.rule.type}:${event.status}`;
   const now = performance.now();
@@ -136,7 +150,12 @@ function showAlert(event) {
 
   const div = document.createElement('div');
   div.className = event.status === 'breach' ? 'alert-breach' : 'alert-warn';
-  div.textContent = `${event.status.toUpperCase()} | ${event.rule.zone}: ${event.say}`;
+  // "BREACH | press: Step back" reads like a log file. Say the sentence, then
+  // name the place quietly underneath.
+  const head = event.status === 'breach' ? 'Too late' : 'Warning';
+  div.innerHTML =
+    `<div class="a-say">${event.say}</div>` +
+    `<div class="a-meta">${head} · ${event.rule.zone} · ${ruleLabel(event.rule.type)}</div>`;
   alertBanner.prepend(div);
   setTimeout(() => div.remove(), 4300);
 
@@ -243,7 +262,7 @@ canvas.addEventListener('pointerup', (evt) => {
 
   pendingRect = null;
   setDrawMode(appState.drawMode);
-  setStatus(`${zoneName} zone set`);
+  setStatus(`"${zoneName}" is now being watched`);
 });
 
 $('zoneSaveBtn').addEventListener('click', () => {
@@ -257,13 +276,13 @@ $('zoneSaveBtn').addEventListener('click', () => {
   ruleEngine.addRule({ type, zone: name, limit, severity, say });
   zoneForm.style.display = 'none';
   pendingRect = null;
-  setStatus('running');
+  setStatus('watching');
 });
 
 $('zoneCancelBtn').addEventListener('click', () => {
   zoneForm.style.display = 'none';
   pendingRect = null;
-  setStatus('running');
+  setStatus('watching');
 });
 
 const ruleInput = $('ruleInput');
@@ -287,7 +306,7 @@ function ensureZoneExists(name) {
 
 async function submitRuleText(text) {
   if (!text || !text.trim()) return;
-  setStatus('compiling rule...');
+  setStatus('understanding your rule...');
   try {
     const { rules } = await LLM.compileRules(text.trim(), [...ruleEngine.zones.keys()]);
     for (const rule of rules) {
@@ -301,9 +320,9 @@ async function submitRuleText(text) {
     clearTimeout(ruleJsonPreview._hide);
     ruleJsonPreview._hide = setTimeout(() => { ruleJsonPreview.style.display = 'none'; }, 12000);
     ruleInput.value = '';
-    setStatus('rule added');
+    setStatus('rule is live');
   } catch (err) {
-    setStatus('running');
+    setStatus('watching');
     showAlert({ status: 'breach', rule: { zone: 'rule compiler' }, say: `could not compile rule: ${err.message}` });
   }
 }
@@ -341,13 +360,13 @@ function speakWarning(text) {
 }
 
 $('testLlmBtn').addEventListener('click', async () => {
-  setStatus('asking the AI brain...');
+  setStatus('checking the on-device model...');
   try {
     const { text } = await LLM.chat([{ role: 'user', content: 'Reply with exactly one word: ready' }]);
-    setStatus('running');
+    setStatus('watching');
     showAlert({ status: 'warn', rule: { zone: 'AI brain' }, say: `replied: "${text.trim()}"` });
   } catch (err) {
-    setStatus('running');
+    setStatus('watching');
     showAlert({ status: 'breach', rule: { zone: 'AI brain' }, say: `not reachable: ${err.message}` });
   }
 });
@@ -508,18 +527,18 @@ async function main() {
   try {
     fitCanvas();
     await startCamera();
-    setStatus('loading vision model...');
+    setStatus('starting the camera brain...');
     const model = await SafetyEyeVision.loadVisionModel();
     const tracker = new SafetyEyeVision.Tracker();
     loading.classList.add('hide');
-    setStatus('ready');
+    setStatus('watching');
     detectLoop(model, tracker);
   } catch (err) {
     appState.source = 'demo';
     fitCanvas();
     drawDemoBackdrop();
     loading.classList.add('hide');
-    setStatus(`camera unavailable: ${err.message}`);
+    setStatus('no camera - showing demo footage');
     console.error(err);
   }
   paintStats();
