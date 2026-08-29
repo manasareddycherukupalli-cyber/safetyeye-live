@@ -27,6 +27,8 @@ function showAlert(event) {
   div.textContent = `[${event.status.toUpperCase()}] ${event.rule.zone}: ${event.say}`;
   alertBanner.prepend(div);
   setTimeout(() => div.remove(), 4000);
+
+  speakWarning(event.say);
 }
 
 // --- Zone drawing: click-drag on the canvas to define a rectangle, then a
@@ -93,6 +95,86 @@ document.getElementById('zoneCancelBtn').addEventListener('click', () => {
   pendingRect = null;
   setStatus('running');
 });
+
+// --- Task 7: speech/typed rule -> compiled JSON rule -> zone appears -> spoken warning.
+const ruleInput = document.getElementById('ruleInput');
+const ruleJsonPreview = document.getElementById('ruleJsonPreview');
+
+// If the LLM names a zone that hasn't been drawn yet, place a reasonable
+// default rectangle so the zone appears immediately (matches the demo: "say
+// a rule, the zone draws itself") — it can still be redrawn by hand later.
+function ensureZoneExists(name) {
+  if (ruleEngine.zones.has(name)) return;
+  const w = canvas.width * 0.3 || 200;
+  const h = canvas.height * 0.3 || 150;
+  ruleEngine.setZone(name, {
+    x: (canvas.width || 640) / 2 - w / 2,
+    y: (canvas.height || 480) / 2 - h / 2,
+    w,
+    h,
+  });
+}
+
+async function submitRuleText(text) {
+  if (!text || !text.trim()) return;
+  setStatus('compiling rule…');
+  try {
+    const rules = await SafetyEyeLLM.compileRules(text.trim());
+    for (const rule of rules) {
+      ensureZoneExists(rule.zone);
+      ruleEngine.addRule(rule);
+    }
+    ruleJsonPreview.textContent = JSON.stringify({ rules }, null, 2);
+    ruleJsonPreview.style.display = 'block';
+    ruleInput.value = '';
+    setStatus('running');
+  } catch (err) {
+    setStatus('running');
+    showAlert({ status: 'breach', rule: { zone: 'rule compiler' }, say: `couldn't compile rule — ${err.message}` });
+  }
+}
+
+document.getElementById('submitRuleBtn').addEventListener('click', () => {
+  submitRuleText(ruleInput.value);
+});
+ruleInput.addEventListener('keydown', (evt) => {
+  if (evt.key === 'Enter') submitRuleText(ruleInput.value);
+});
+
+// Speech input is a convenience layer over the same typed path — and per
+// CLAUDE.md's disclosed limitation, the browser's speech recognition sends
+// audio to Google, so it punctures the "fully offline" claim. Typed input
+// is the offline-safe fallback; both feed the same submitRuleText().
+const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+const speakRuleBtn = document.getElementById('speakRuleBtn');
+if (SpeechRecognitionImpl) {
+  const recognition = new SpeechRecognitionImpl();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.addEventListener('result', (evt) => {
+    const transcript = evt.results[0][0].transcript;
+    ruleInput.value = transcript;
+    submitRuleText(transcript);
+  });
+  recognition.addEventListener('error', (evt) => {
+    showAlert({ status: 'warn', rule: { zone: 'speech input' }, say: `mic error: ${evt.error}` });
+  });
+
+  speakRuleBtn.addEventListener('click', () => recognition.start());
+} else {
+  speakRuleBtn.disabled = true;
+  speakRuleBtn.title = 'Speech recognition not supported in this browser — type the rule instead';
+}
+
+// Spoken warnings: say the rule's "say" line out loud when it fires, using
+// the browser's built-in speech synthesis (on-device, no network call).
+function speakWarning(text) {
+  if (!('speechSynthesis' in window)) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  speechSynthesis.speak(utterance);
+}
 
 // --- Task 6: one round trip to the on-device model server, to confirm the
 // app <-> llama-server connection works before anything is built on top of it.

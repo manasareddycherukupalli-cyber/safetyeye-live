@@ -26,6 +26,20 @@
     background: #55aaff; color: #111; border: none; padding: 6px 12px;
     border-radius: 6px; font-weight: bold; cursor: pointer;
   }
+  #ruleBar {
+    position: absolute; top: 80px; right: 8px; z-index: 10;
+    display: flex; gap: 4px; align-items: flex-start;
+  }
+  #ruleInput { width: 200px; padding: 4px; }
+  #speakRuleBtn, #submitRuleBtn {
+    padding: 4px 8px; cursor: pointer;
+  }
+  #ruleJsonPreview {
+    position: absolute; top: 112px; right: 8px; z-index: 10;
+    max-width: 260px; background: rgba(0,0,0,0.7); color: #9f9;
+    font-family: monospace; font-size: 11px; padding: 6px; border-radius: 6px;
+    white-space: pre-wrap; display: none;
+  }
   #alertBanner {
     position: absolute; bottom: 8px; left: 8px; right: 8px; z-index: 10;
     max-height: 30%; overflow-y: auto; font-size: 13px;
@@ -44,6 +58,12 @@
     <div id="status">starting…</div>
     <button id="drawZoneBtn">Draw Zone</button>
     <button id="testLlmBtn">Test AI Brain</button>
+    <div id="ruleBar">
+      <input id="ruleInput" placeholder="e.g. keep people away from the press" />
+      <button id="speakRuleBtn" title="Speak the rule instead of typing">🎤</button>
+      <button id="submitRuleBtn">Submit Rule</button>
+    </div>
+    <div id="ruleJsonPreview"></div>
     <div id="alertBanner"></div>
 
     <div id="zoneForm">
