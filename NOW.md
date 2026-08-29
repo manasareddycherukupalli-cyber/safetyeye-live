@@ -12,10 +12,11 @@ Update this file as you go. It is the "where were we" note for a fresh session.
 - [x] tfjs + coco-ssd weights vendored, duplicate removed, and moved to `app/vendor/`
   at 13:45 IST so `llama-server --path ~/safetyeye/app` can actually serve them.
   All references now `./vendor/...` (index.html, sw.js, vision.js).
-- [x] App shell servable by `llama-server --path ./app` — the path blocker is cleared;
-  still needs one real load on the phone
-- [ ] Camera feed rendering on the phone (code written, untestable on laptop — no working laptop camera; first real test on phone)
-- [x] Detection loop running (COCO-SSD + IoU tracker + 0.75s trajectory prediction, verified with node logic tests)
+- [x] App shell served by `llama-server --path ./app` — **confirmed on device 14:50 IST**
+- [x] Camera feed rendering on the phone — **confirmed live on device 15:02 IST**
+- [x] Detection loop running — **confirmed on device 15:02 IST**: people at 90%/52%,
+  laptop and mouse detected, persistent track IDs (#97, #98, #107, #108) holding across
+  frames, trajectory markers drawn. Weights loaded from `app/vendor/`, no network.
 - [x] Zone geometry + rule engine (zone_intrusion, occupancy, obstruction, proximity) with manual click-drag zone drawing UI as a stand-in for voice input
 - [x] First LLM round trip from the app (app.js -> llm.js, verified against a fake local server; still needs one real check against the phone's llama-server)
 - [x] Speech/typed rule → JSON rules — Manasa's phone-tested `llm.js` (`LLM.compileRules`) is now the
