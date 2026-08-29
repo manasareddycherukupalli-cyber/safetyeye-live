@@ -6,8 +6,10 @@ import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.ViewGroup
 import android.view.WindowInsets
+import android.widget.FrameLayout
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -27,15 +29,8 @@ class MainActivity : Activity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
-            setBackgroundColor(android.graphics.Color.rgb(10, 13, 17))
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    super.onPageFinished(view, url)
-                    // Insets usually arrive before the page is ready to receive them,
-                    // so replay the last measurement once the document exists.
-                    applyInsets(lastInsets)
-                }
-            }
+            setBackgroundColor(SHELL_BACKGROUND)
+            webViewClient = WebViewClient()
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest) {
                     runOnUiThread {
@@ -68,17 +63,30 @@ class MainActivity : Activity() {
             settings.textZoom = 100
         }
 
-        setContentView(webView)
+        // targetSdk 35+ draws edge-to-edge: the window fills the whole display, so the
+        // page would render under the status bar, the punch-hole camera and the gesture
+        // pill. The page cannot pad itself out of the way — CSS env(safe-area-inset-*)
+        // reads 0 in an Android WebView — so the real insets are measured here.
+        //
+        // They are applied to a frame around the WebView rather than to the WebView.
+        // Two earlier attempts failed silently on the device: handing the numbers to the
+        // page as CSS custom properties, and padding the WebView itself, which does not
+        // inset what Chromium draws. Padding an ordinary ViewGroup moves its child, and
+        // there is no version of that which quietly does nothing.
+        val frame = FrameLayout(this).apply {
+            setBackgroundColor(SHELL_BACKGROUND)
+            addView(webView)
+        }
+        setContentView(frame)
 
-        // targetSdk 35+ draws edge-to-edge, so the WebView fills the display and the
-        // page renders under the status bar and the gesture pill. CSS env(safe-area-inset-*)
-        // is not populated in an Android WebView, so the real insets are measured here
-        // and handed to the page as custom properties instead.
-        webView.setOnApplyWindowInsetsListener { _, insets ->
-            lastInsets = insetsToCss(insets)
-            applyInsets(lastInsets)
+        frame.setOnApplyWindowInsetsListener { v, insets ->
+            val bars = systemBarsOf(insets)
+            v.setPadding(bars[0], bars[1], bars[2], bars[3])
+            Log.d(TAG, "window insets l=${bars[0]} t=${bars[1]} r=${bars[2]} b=${bars[3]}")
             insets
         }
+        // The first dispatch can land before the listener is attached; ask for another.
+        frame.requestApplyInsets()
 
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION)
@@ -86,46 +94,24 @@ class MainActivity : Activity() {
         webView.loadUrl("file:///android_asset/index.html")
     }
 
-    private var lastInsets: String? = null
-
-    private fun insetsToCss(insets: WindowInsets): String {
-        val d = resources.displayMetrics.density
-        val top: Int
-        val bottom: Int
-        val left: Int
-        val right: Int
+    // left, top, right, bottom in physical pixels. The cutout is folded in with the
+    // system bars so a punch-hole or an island is cleared even where the status bar is
+    // shorter than it is.
+    private fun systemBarsOf(insets: WindowInsets): IntArray =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-            top = bars.top; bottom = bars.bottom; left = bars.left; right = bars.right
+            val bars = insets.getInsets(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout(),
+            )
+            intArrayOf(bars.left, bars.top, bars.right, bars.bottom)
         } else {
             @Suppress("DEPRECATION")
-            run {
-                top = insets.systemWindowInsetTop
-                bottom = insets.systemWindowInsetBottom
-                left = insets.systemWindowInsetLeft
-                right = insets.systemWindowInsetRight
-            }
+            intArrayOf(
+                insets.systemWindowInsetLeft,
+                insets.systemWindowInsetTop,
+                insets.systemWindowInsetRight,
+                insets.systemWindowInsetBottom,
+            )
         }
-        // CSS pixels, not physical pixels — divide by density.
-        return "${top / d}px,${bottom / d}px,${left / d}px,${right / d}px"
-    }
-
-    private fun applyInsets(css: String?) {
-        val parts = css?.split(",") ?: return
-        if (parts.size != 4) return
-        webView.evaluateJavascript(
-            """
-            (function(){
-              var r = document.documentElement.style;
-              r.setProperty('--sat','${parts[0]}');
-              r.setProperty('--sab','${parts[1]}');
-              r.setProperty('--sal','${parts[2]}');
-              r.setProperty('--sar','${parts[3]}');
-            })();
-            """.trimIndent(),
-            null,
-        )
-    }
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -159,6 +145,10 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        private const val TAG = "SafetyEye"
+
+        // --bg from the page, so the bars sit on the same ground as the app
+        private const val SHELL_BACKGROUND = 0xFF0A0D11.toInt()
         private const val CAMERA_PERMISSION = 11
         private const val WEB_PERMISSION_REQUEST = 12
     }
