@@ -9,7 +9,9 @@ Read this first. It is the full context for this project.
 - **Student bucket · Open Innovation track.**
 - **Event window: 29 Aug 2026 11:00 → 30 Aug 2026 ~13:00 IST.** Hacking began 11:00 Sat.
 - Shortlisted top 17 of 26 on the SafetyEye idea. Top 6 per city advance to the
-  Grand Finale (Bengaluru, 9–11 Oct 2026).
+  Grand Finale (Bengaluru, 9–11 Oct 2026) — **3 student teams and 3 working-professional
+  teams**, so we are competing for three student slots, not six open ones. Standout
+  teams beyond the Top 6 can still earn Finale slots.
 
 ## HARD RULE — why this repo exists
 
@@ -50,8 +52,23 @@ warning failed, so the report leads with **incidents prevented**.
 
 The organisers' own tip: *"Build apps that run locally and on-device, including the
 backend, using on-device LLMs. The highest on-device builds will be preferred for the
-Top 10."* On-device inference costs zero credits; OpenRouter credits are capped and
-burn down. **Never add a cloud API call.**
+Top 10."* The published rules confirm it: *"A local or open-source model at the core
+earns brownie points"* and *"if it runs on the phone with a local or open-source model
+at the core, it qualifies"* — **PWA is explicitly a welcome stack**, so serving the app
+from `llama-server` is a first-class entry, not a workaround.
+
+**Never add a cloud API call** — but not for the reason first written here. The rules
+say *"AI credits for the weekend are free"*, so cost is not the argument and we must
+not claim it is. The argument is the product: the entire pitch is aeroplane mode, no
+cloud, no server, no subscription. One remote call and the differentiator is gone.
+
+**We run on the CPU, not the NPU.** The rules note that *"on-device inference targets
+the Snapdragon NPU"*; llama.cpp does CPU inference and gets ~15.6 tok/s on the 3B.
+Chasing the NPU means the Qualcomm QNN stack and a model conversion — a day of work
+that can end with nothing, traded against a stack that already works. The honest
+answer for a judge: no vendor SDK, no conversion, runs on any Android device, and the
+LLM is never in the reaction path, so the latency NPU would buy us is latency we do
+not need.
 
 ## Architecture — the load-bearing decision
 
@@ -159,12 +176,26 @@ WebLLM immediately. Do not fight it into the evening.
 6. One tap: shift report, on-device, faces blurred.
    *"Nine warnings, three breaches, 67% prevented."*
 
-Close: no cloud, no server, no credits spent. This is the phone.
+Close: no cloud, no server, no subscription. This is the phone.
+
+(Not "no credits spent" — credits are free this weekend, so that line claims a saving
+nobody is paying for. The claim that lands is operational: a site with no network and
+no budget can run this.)
 
 ## Logistics
 
-- Submit on **Reskilll** before the hard cutoff — repos lock before Top 10 pitches,
-  late entries take a scoring penalty. **Only Surendra (team leader) can submit.**
+- Submit **the repo AND demo assets** on Reskilll before the hard cutoff — repos lock
+  before Top 10 pitches, late entries risk a scoring penalty or disqualification.
+  **Only Surendra (team leader) can submit.** *Ask an organiser what counts as demo
+  assets — video? slides? — today, not at 06:30.*
+- **Every entry must run and pitch on the phone.** Not a preference, a rule.
+- HackTracker records **counts and durations only** — no keystrokes, screenshots or
+  browsing. Office Kit scoring is purely whether you genuinely worked through it and
+  for how long. Nothing to game; just use it during every RED window.
+- Confirm the real timings at the venue: the published rules say check-in ~08:00 Sat
+  through awards ~17:00 Sun, which does not match the schedule table below.
+- Do not film or share another team's screen or build.
+- Query desk stays open through close. Series contact: sameera@reskilll.com.
 - Make the repo **public** and check it while signed out. The last one 404'd on
   everyone because it was private.
 - **Do not tamper with HackTracker.** Crash and tamper logs are read and penalised.
