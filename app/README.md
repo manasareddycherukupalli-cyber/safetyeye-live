@@ -4,33 +4,20 @@ Served by `llama-server --path ~/safetyeye/app`, so the page and the model API s
 an origin. That single decision buys us no CORS, no mixed content, and a secure
 context for `getUserMedia`.
 
-## For Surendra — two lines to add to `index.html`
+## PWA — wired, nothing to do
 
-The PWA plumbing is written and working; `index.html` just needs to opt in.
+`index.html` carries the manifest link and registers `sw.js` via `pwa.js`. The service
+worker precaches every module and all 18 MB of vision weights, and never caches
+`/v1/*`, `/completion` or `/health` — a cached model reply would be a demo that lies.
 
-In `<head>`:
+## Vendored paths — one copy, these ones
 
-```html
-<link rel="manifest" href="./manifest.webmanifest">
-<meta name="theme-color" content="#0d1117">
-<link rel="apple-touch-icon" href="./icon-192.png">
-```
-
-Before your other scripts:
-
-```html
-<script src="./pwa.js"></script>
-```
-
-That's it. `sw.js` already lists `./index.html` in its precache list.
-
-## Loading COCO-SSD — do not skip the modelUrl
+Both of us downloaded tfjs and COCO-SSD to different paths on 29 Aug. The duplicate
+20 MB was removed; these are the live paths and `vision.js` already uses them:
 
 ```js
-const model = await cocoSsd.load({
-  base: 'lite_mobilenet_v2',
-  modelUrl: '../vendor/coco-ssd/model.json'
-});
+cocoSsd.load({ base: 'lite_mobilenet_v2',
+               modelUrl: '../vendor/coco-ssd/model/model.json' });
 ```
 
 Without `modelUrl` the library silently fetches from storage.googleapis.com and the

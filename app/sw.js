@@ -11,19 +11,24 @@ const CACHE = 'safetyeye-v1';
 const SHELL = [
   './',
   './index.html',
-  './llm-test.html',
+  './app.js',
+  './vision.js',
+  './rules.js',
+  './report.js',
+  './log.js',
   './llm.js',
+  './llm-test.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
-  '../vendor/tf.min.js',
-  '../vendor/coco-ssd.min.js',
-  '../vendor/coco-ssd/model.json',
-  '../vendor/coco-ssd/group1-shard1of5',
-  '../vendor/coco-ssd/group1-shard2of5',
-  '../vendor/coco-ssd/group1-shard3of5',
-  '../vendor/coco-ssd/group1-shard4of5',
-  '../vendor/coco-ssd/group1-shard5of5'
+  '../vendor/tfjs/tf.min.js',
+  '../vendor/coco-ssd/coco-ssd.min.js',
+  '../vendor/coco-ssd/model/model.json',
+  '../vendor/coco-ssd/model/group1-shard1of5',
+  '../vendor/coco-ssd/model/group1-shard2of5',
+  '../vendor/coco-ssd/model/group1-shard3of5',
+  '../vendor/coco-ssd/model/group1-shard4of5',
+  '../vendor/coco-ssd/model/group1-shard5of5'
 ];
 
 // addAll fails the whole install if any single URL 404s, and app/index.html does
