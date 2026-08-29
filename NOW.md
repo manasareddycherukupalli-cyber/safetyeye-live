@@ -17,9 +17,9 @@ Update this file as you go. It is the "where were we" note for a fresh session.
 - [x] First LLM round trip from the app (app.js -> llm.js chatCompletion(), verified against a fake local server; needs Manasa's real llama-server to fully confirm)
 - [x] Speech/typed rule → JSON rules (compileRules() placeholder in llm.js, verified against a fake server; Manasa to refine prompt/model)
 - [x] Spoken warning fires before a crossing (speechSynthesis hooked into showAlert; predicted-position warn already fires before actual crossing per Task 5)
-- [ ] Event log persists across reload
+- [x] Event log persists across reload (IndexedDB in log.js — placeholder, Manasa to refine schema)
 - [ ] Mesh relay + second phone console
-- [ ] Shift report generated on-device
+- [x] Shift report generated on-device (report.js: summary math verified against demo script's own numbers, breach snapshots fully blurred)
 - [ ] README with attribution
 - [ ] Submitted on Reskilll (Surendra only)
 - [ ] Repo public, checked while signed out
