@@ -129,7 +129,9 @@ app/llm.js        compileRules · narrateWarning · writeReport · askLog
 app/mesh.js       relay client
 app/log.js        IndexedDB events + frames
 app/report.js     shift report + on-device blur
-vendor/           tfjs + coco-ssd weights — LOCAL, never a CDN
+app/supervisor.html + supervisor.js   second phone's console
+app/vendor/       tfjs + coco-ssd weights — LOCAL, never a CDN, and INSIDE app/
+                  because llama-server --path only serves what is under app/
 server/relay.py   mesh event relay
 ```
 

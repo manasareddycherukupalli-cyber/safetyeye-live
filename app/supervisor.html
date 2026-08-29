@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SafetyEye — Supervisor</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+  html, body { margin: 0; background: #0d1117; color: #eee; font-family: sans-serif; }
+  body { padding: 12px; }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .sub { color: #8b949e; font-size: 12px; margin-bottom: 12px; }
+  .bar { display: flex; gap: 6px; margin-bottom: 12px; }
+  .bar input { flex: 1; min-width: 0; padding: 8px; background: #161b22; color: #eee;
+               border: 1px solid #30363d; border-radius: 6px; font-size: 14px; }
+  .bar button { padding: 8px 14px; border: none; border-radius: 6px; font-weight: bold;
+                background: #00ff88; color: #111; cursor: pointer; }
+  #conn { font-size: 12px; margin-bottom: 12px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+         background: #666; margin-right: 6px; vertical-align: middle; }
+  .dot.live { background: #00ff88; }
+  .dot.down { background: #ff4444; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .tile { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px; text-align: center; }
+  .tile b { display: block; font-size: 24px; line-height: 1.1; }
+  .tile span { font-size: 11px; color: #8b949e; }
+  .tile.prevented b { color: #00ff88; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 14px; }
+  th, td { padding: 5px 8px; border-bottom: 1px solid #30363d; text-align: left; }
+  th { color: #8b949e; font-weight: normal; }
+  #feed { list-style: none; padding: 0; margin: 0; }
+  #feed li { padding: 7px 10px; margin-bottom: 5px; border-radius: 6px; font-size: 13px;
+             background: #161b22; border-left: 4px solid #30363d; }
+  #feed li.warn { border-left-color: #ffcc00; }
+  #feed li.breach { border-left-color: #ff4444; }
+  #feed .meta { color: #8b949e; font-size: 11px; }
+</style>
+</head>
+<body>
+  <h1>Supervisor console</h1>
+  <div class="sub">Live events from every site phone. No video crosses the network — only events.</div>
+
+  <div class="bar">
+    <input id="relayUrl" placeholder="relay address, e.g. 192.168.1.7:8090" inputmode="url" autocapitalize="off">
+    <button id="connectBtn">Connect</button>
+  </div>
+
+  <div id="conn"><span class="dot"></span><span id="connText">not connected</span></div>
+
+  <div class="tiles">
+    <div class="tile"><b id="tWarn">0</b><span>warnings</span></div>
+    <div class="tile"><b id="tBreach">0</b><span>breaches</span></div>
+    <div class="tile prevented"><b id="tPrevented">0%</b><span>prevented</span></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Zone</th><th>Warnings</th><th>Breaches</th></tr></thead>
+    <tbody id="zoneRows"><tr><td colspan="3">waiting for events…</td></tr></tbody>
+  </table>
+
+  <ul id="feed"></ul>
+
+  <script src="./pwa.js"></script>
+  <script src="./report.js"></script>
+  <script src="./mesh.js"></script>
+  <script src="./supervisor.js"></script>
+</body>
+</html>
