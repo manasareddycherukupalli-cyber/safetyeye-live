@@ -197,6 +197,23 @@
   .tile.hot .n { color: var(--red); }
   .tile.live .n { color: var(--mint); }
   .tile.amber .n { color: var(--amber); }
+  .tally {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 11px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .tally b {
+    color: var(--text);
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .tally b.pct { color: var(--mint); }
+  .tally .sep { color: var(--dim); }
 
   .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; font-size: 10.5px; font-weight: 700; border: 1px solid transparent; flex: none; }
   .chip.mint { background: var(--mint-dim); color: var(--mint); border-color: rgba(0,229,160,.26); }
@@ -404,6 +421,7 @@
               <div class="tile amber"><div class="th"><span>Warnings</span></div><div class="n" id="h-warn">0</div></div>
               <div class="tile" id="t-inc"><div class="th"><span>Breaches</span></div><div class="n" id="h-inc">0</div></div>
             </div>
+            <div class="card tally" id="tally"><b>0</b> warned <span class="sep">·</span> <b>0</b> breached <span class="sep">·</span> <b class="pct">0%</b> prevented</div>
             <div class="card" style="margin-top:11px">
               <div class="card-h"><h3>Active rules</h3><span class="hint-x">tap Monitor to draw</span></div>
               <div class="rule">

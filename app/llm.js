@@ -35,10 +35,17 @@ const LLM = (() => {
   };
 
   async function chat(messages, opts = {}) {
+    const cap = opts.maxTokens ?? 256;
     const body = {
       messages,
       temperature: opts.temperature ?? 0.1,
-      n_predict: opts.maxTokens ?? 256,
+      // /v1/chat/completions is the OpenAI-compatible endpoint and honours
+      // max_tokens. It ignores n_predict, which is the native endpoint's name —
+      // send both so neither route can run unbounded. Getting this wrong once
+      // cost us a five-minute hang: the cap was dropped and the model generated
+      // until the 4096-token context filled.
+      max_tokens: cap,
+      n_predict: cap,
       stream: false
     };
     if (opts.schema) {
@@ -48,13 +55,28 @@ const LLM = (() => {
       };
     }
 
+    // A hung request is worse than a failed one — on stage we need it to give up
+    // and say so. 45s is generous at 15.6 tok/s for a 256-token cap.
+    const deadline = new AbortController();
+    const timer = setTimeout(() => deadline.abort(), opts.timeoutMs ?? 45000);
+    if (opts.signal) opts.signal.addEventListener('abort', () => deadline.abort());
+
     const started = performance.now();
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: opts.signal
-    });
+    let res;
+    try {
+      res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: deadline.signal
+      });
+    } catch (e) {
+      throw new Error(e.name === 'AbortError'
+        ? `model timed out after ${((opts.timeoutMs ?? 45000) / 1000)}s`
+        : `could not reach the model: ${e.message}`);
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) throw new Error(`model returned ${res.status}: ${await res.text()}`);
 
     const json = await res.json();
@@ -81,8 +103,11 @@ const LLM = (() => {
           'obstruction (something blocking a zone), proximity (person near person or object).\n' +
           'limit is the count that trips the rule; use 1 unless a number is stated.\n' +
           'severity is critical when injury is plausible, otherwise warn.\n' +
-          'say is the sentence spoken aloud to the worker BEFORE they cross: ' +
-          'under eight words, an instruction not a description, e.g. "Step back from the press".'
+          'say is the sentence spoken aloud to the worker BEFORE they cross. ' +
+          'Under eight words. A direct instruction to one person, not a description ' +
+          'and not a policy. Never mention the limit, a count, or the rule type. ' +
+          'Good: "Step back from the press." "Clear the fire exit." ' +
+          'Bad: "Keep 1 person away from the press." "Occupancy limit reached."'
       },
       { role: 'user', content: spoken }
     ], { schema: RULE_SCHEMA, maxTokens: 320, ...opts });

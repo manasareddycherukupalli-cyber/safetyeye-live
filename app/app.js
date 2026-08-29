@@ -112,11 +112,27 @@ $('armBtn').addEventListener('click', () => {
 const ALERT_COOLDOWN_MS = 2000;
 const lastAlertAt = new Map();
 
+const tally = { warn: 0, breach: 0 };
+
+function renderTally() {
+  const total = tally.warn + tally.breach;
+  const pct = total ? Math.round((tally.warn / total) * 100) : 0;
+  const el = document.getElementById('tally');
+  if (!el) return;
+  el.innerHTML =
+    `<b>${tally.warn}</b> warned <span class="sep">·</span> ` +
+    `<b>${tally.breach}</b> breached <span class="sep">·</span> ` +
+    `<b class="pct">${pct}%</b> prevented`;
+}
+
 function showAlert(event) {
   const key = `${event.rule.zone}:${event.rule.type}:${event.status}`;
   const now = performance.now();
   if (now - (lastAlertAt.get(key) || 0) < ALERT_COOLDOWN_MS) return false;
   lastAlertAt.set(key, now);
+
+  if (event.status === 'breach') tally.breach += 1; else tally.warn += 1;
+  renderTally();
 
   const div = document.createElement('div');
   div.className = event.status === 'breach' ? 'alert-breach' : 'alert-warn';
@@ -162,6 +178,7 @@ function addEventToUi(event) {
 }
 
 let dragStart = null;
+let dragCurrent = null;
 let pendingRect = null;
 
 function canvasPoint(evt) {
@@ -186,12 +203,21 @@ drawExitBtn.addEventListener('click', () => setDrawMode('exit'));
 
 canvas.addEventListener('pointerdown', (evt) => {
   if (!appState.drawMode) return;
+  evt.preventDefault();
   dragStart = canvasPoint(evt);
   canvas.setPointerCapture(evt.pointerId);
 });
 
+// Live rubber-band box, so you can see what you are about to draw.
+canvas.addEventListener('pointermove', (evt) => {
+  if (!appState.drawMode || !dragStart) return;
+  evt.preventDefault();
+  dragCurrent = canvasPoint(evt);
+});
+
 canvas.addEventListener('pointerup', (evt) => {
   if (!appState.drawMode || !dragStart) return;
+  evt.preventDefault();
   const [ex, ey] = canvasPoint(evt);
   const [sx, sy] = dragStart;
   const rect = {
@@ -201,6 +227,7 @@ canvas.addEventListener('pointerup', (evt) => {
     h: Math.abs(ey - sy),
   };
   dragStart = null;
+  dragCurrent = null;
   if (rect.w < 10 || rect.h < 10) return;
 
   pendingRect = rect;
@@ -241,6 +268,10 @@ $('zoneCancelBtn').addEventListener('click', () => {
 
 const ruleInput = $('ruleInput');
 const ruleJsonPreview = $('ruleJsonPreview');
+ruleJsonPreview.addEventListener('click', () => {
+  clearTimeout(ruleJsonPreview._hide);
+  ruleJsonPreview.style.display = 'none';
+});
 
 function ensureZoneExists(name) {
   if (ruleEngine.zones.has(name)) return;
@@ -265,6 +296,10 @@ async function submitRuleText(text) {
     }
     ruleJsonPreview.textContent = JSON.stringify({ rules }, null, 2);
     ruleJsonPreview.style.display = 'block';
+    // It covers the camera, which is the thing we are demonstrating. Show it long
+    // enough to read and photograph, then get out of the way. Tap dismisses sooner.
+    clearTimeout(ruleJsonPreview._hide);
+    ruleJsonPreview._hide = setTimeout(() => { ruleJsonPreview.style.display = 'none'; }, 12000);
     ruleInput.value = '';
     setStatus('rule added');
   } catch (err) {
@@ -336,9 +371,21 @@ async function startCamera() {
   video.srcObject = stream;
   await new Promise((resolve) => { video.onloadedmetadata = resolve; });
   fitCanvas();
+  if (typeof ruleEngine.setFrameSize === 'function') ruleEngine.setFrameSize(canvas.width, canvas.height);
 }
 
 function drawZones() {
+  // the box being dragged right now, before it is named and saved
+  if (dragStart && dragCurrent) {
+    const [sx, sy] = dragStart, [cx, cy] = dragCurrent;
+    ctx.save();
+    ctx.strokeStyle = '#f0ad2a';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    ctx.strokeRect(Math.min(sx, cx), Math.min(sy, cy), Math.abs(cx - sx), Math.abs(cy - sy));
+    ctx.restore();
+  }
+
   ctx.lineWidth = 2;
   ctx.font = '700 14px Inter, sans-serif';
   for (const [name, rect] of ruleEngine.zones) {
