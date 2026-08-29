@@ -5,9 +5,9 @@ Update this file as you go. It is the "where were we" note for a fresh session.
 ## Status
 
 - [x] Repo created, 29 Aug 11:18 IST
-- [ ] Termux installed (F-Droid build, NOT Play Store)
-- [ ] llama.cpp built on the phone
-- [ ] Qwen 3B + 1.5B GGUF downloaded to the phone
+- [x] Termux installed, 12:03 IST (GitHub release APK)
+- [x] llama-server on the phone, 12:22 IST — installed via `pkg install llama-cpp`, NOT built from source (clang 21 ICE on ggml repack.cpp)
+- [x] Qwen 3B downloaded, 12:10 IST (1.8 GB in 1m49s) — 1.5B fallback pending
 - [ ] `llama-server` answers `curl` on 127.0.0.1:8080
 - [ ] tfjs + coco-ssd weights vendored into `vendor/`
 - [ ] App shell served by `llama-server --path ./app`
