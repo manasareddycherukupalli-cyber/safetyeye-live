@@ -269,6 +269,7 @@
   #synth { z-index: 1; background: linear-gradient(165deg, #111822, #05070a); }
   .hud { position: absolute; inset: 0; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 11px; }
   .hud-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
   .hud-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; background: rgba(4,7,10,.76); backdrop-filter: blur(14px); font-size: 10px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; border: 1px solid rgba(255,255,255,.1); }
   .hud-pill.armed { color: var(--mint); border-color: rgba(0,229,160,.4); }
   .hud-pill.alarm { color: var(--red); border-color: rgba(255,90,90,.5); }
@@ -297,8 +298,7 @@
   .tool[data-zone="exit"].on { color: var(--blue); }
   .hint { display: none; gap: 9px; align-items: flex-start; background: var(--amber-dim); border: 1px solid rgba(255,184,77,.26); color: var(--amber); border-radius: 13px; padding: 11px 13px; font-size: 11.5px; line-height: 1.5; margin: 0 18px 12px; font-weight: 500; }
 
-  .rulebar { display: flex; gap: 6px; align-items: stretch; }
-  .rulebar input, .field {
+  .field {
     width: 100%;
     min-width: 0;
     background: var(--surface-2);
@@ -309,9 +309,8 @@
     font: 500 13px var(--font);
     outline: none;
   }
-  .rulebar input:focus, .field:focus { border-color: rgba(0,229,160,.55); }
+  .field:focus { border-color: rgba(0,229,160,.55); }
   .iconbtn { width: 44px; flex: none; padding: 0; }
-  #ruleJsonPreview { display: none; margin-top: 10px; padding: 11px; border-radius: 12px; background: #070a0e; color: var(--mint-2); font: 10.5px var(--mono); white-space: pre-wrap; overflow: auto; max-height: 130px; }
 
   #alertBanner { position: absolute; left: 18px; right: 18px; bottom: 88px; z-index: 70; display: flex; flex-direction: column; gap: 7px; pointer-events: none; }
   .alert-warn, .alert-breach { padding: 10px 12px; border-radius: 13px; color: #04120c; font-size: 12px; font-weight: 700; box-shadow: 0 16px 32px -20px #000; animation: incIn .28s var(--ease); }
@@ -459,7 +458,7 @@
             <div class="alarm-flash" id="flash"></div>
             <div class="loading" id="loading"><div class="spin"></div><b>Starting SafetyEye</b><small id="loadingText">Requesting camera permission and loading the local vision model.</small></div>
             <div class="hud">
-              <div class="hud-top"><div class="hud-pill idle" id="hudState"><span class="dot pulse"></span> Not started</div><div class="hud-pill src" id="hudSrc">Camera</div></div>
+              <div class="hud-top"><div class="hud-pill idle" id="hudState"><span class="dot pulse"></span> Not started</div><div class="hud-right"><div class="hud-pill src" id="hudSrc">Camera</div><div class="hud-pill src" id="hudLock">Screen free</div></div></div>
               <div class="hud-bottom">
                 <div class="hud-stat"><span>People</span><b id="s-people">0</b></div>
                 <div class="hud-stat"><span>Breaches</span><b id="s-inc">0</b></div>
@@ -470,21 +469,9 @@
           <div class="toolbar">
             <button class="tool" data-zone="restricted" id="drawZoneBtn">Danger</button>
             <button class="tool" data-zone="exit" id="drawExitBtn">Exit</button>
-            <button class="tool" id="testLlmBtn">AI test</button>
             <button class="tool" id="testAlarmBtn">Test alarm</button>
           </div>
           <div class="hint" id="drawHint">Drag a box on the picture around the area to monitor.</div>
-          <div class="pad">
-            <div class="card">
-              <div class="card-h"><h3>Natural-language rule</h3><span class="hint-x">voice or text</span></div>
-              <div class="rulebar" id="ruleBar">
-                <input id="ruleInput" placeholder="Keep people away from the press">
-                <button class="btn sm ghost iconbtn" id="speakRuleBtn" title="Speak rule">Mic</button>
-              </div>
-              <button class="btn sm" id="submitRuleBtn" style="margin-top:8px">Submit rule</button>
-              <pre id="ruleJsonPreview"></pre>
-            </div>
-          </div>
         </section>
 
         <section class="view" id="view-log">
@@ -546,7 +533,6 @@
   <script src="vendor/coco-ssd.min.js"></script>
   <script src="vision.js"></script>
   <script src="rules.js"></script>
-  <script src="llm.js"></script>
   <script src="log.js"></script>
   <script src="mesh.js"></script>
   <script src="report.js"></script>

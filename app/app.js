@@ -21,11 +21,54 @@ const appState = {
   source: 'camera',
   drawMode: null,
   people: 0,
+  dark: false,
   warnings: 0,
   breaches: 0,
   latency: null,
   events: [],
 };
+
+/* ---------- screen wake lock ----------
+   A propped phone hits the Android display timeout in 30s, and Chrome stops
+   firing requestAnimationFrame the instant the page is hidden. The detection
+   loop just stops — while the HUD still reads "Watching". That is the one
+   failure this app must never have, so the lock is held whenever we are armed.
+
+   The browser releases the lock every time the page hides, so it has to be
+   re-acquired on visibilitychange rather than taken once and trusted. Nothing
+   here survives the power button: that is an OS decision, and the honest
+   response is to report the gap afterwards, not to pretend it did not happen. */
+const ScreenLock = (() => {
+  const supported = 'wakeLock' in navigator;
+  let sentinel = null;
+
+  const held = () => sentinel !== null;
+
+  async function acquire() {
+    if (!supported || sentinel) return held();
+    try {
+      sentinel = await navigator.wakeLock.request('screen');
+      // Fires on a hide, a tab switch, or the OS taking it back.
+      sentinel.addEventListener('release', () => { sentinel = null; paintStats(); });
+    } catch (err) {
+      // Battery saver and a backgrounded page both refuse. Not fatal — the app
+      // keeps working, it just cannot promise the screen stays awake.
+      sentinel = null;
+      console.warn('[SafetyEye] screen wake lock refused:', err.message);
+    }
+    paintStats();
+    return held();
+  }
+
+  async function release() {
+    if (!sentinel) return;
+    try { await sentinel.release(); } catch (err) { /* already gone */ }
+    sentinel = null;
+    paintStats();
+  }
+
+  return { acquire, release, held, supported };
+})();
 
 function setStatus(msg) {
   statusEl.textContent = msg;
@@ -84,11 +127,26 @@ function paintStats() {
   const occupancy = ruleEngine.rules.find((r) => r.type === 'occupancy');
   $('r-limit').textContent = `Max ${occupancy?.limit || $('zoneLimit').value || 1}`;
   const hudState = $('hudState');
-  hudState.className = `hud-pill ${appState.armed ? 'armed' : 'idle'}`;
+  const watchClass = appState.dark ? 'alarm' : 'armed';
+  hudState.className = `hud-pill ${appState.armed ? watchClass : 'idle'}`;
   hudState.innerHTML = appState.armed
-    ? '<span class="dot pulse"></span> Watching'
+    ? `<span class="dot pulse"></span> ${appState.dark ? 'Too dark' : 'Watching'}`
     : '<span class="dot pulse"></span> Not started';
   $('hudSrc').textContent = appState.source === 'camera' ? 'Camera' : 'Demo scene';
+  const hudLock = $('hudLock');
+  if (!ScreenLock.supported) {
+    hudLock.textContent = 'No wake lock';
+    hudLock.className = 'hud-pill idle';
+  } else if (!appState.armed) {
+    hudLock.textContent = 'Screen free';
+    hudLock.className = 'hud-pill src';
+  } else if (ScreenLock.held()) {
+    hudLock.textContent = 'Screen held';
+    hudLock.className = 'hud-pill armed';
+  } else {
+    hudLock.textContent = 'May sleep';
+    hudLock.className = 'hud-pill alarm';
+  }
   $('homeEyebrow').innerHTML = appState.armed
     ? '<span class="dot pulse"></span> Watching now'
     : '<span class="dot"></span> Ready';
@@ -211,8 +269,16 @@ window.addEventListener('pointerdown', () => Alarm.unlock(), { once: true });
 $('armBtn').addEventListener('click', () => {
   Alarm.unlock();
   appState.armed = !appState.armed;
-  setStatus(appState.armed ? 'watching for rule breaches' : 'watching paused');
-  if (appState.armed) Alarm.say('Now watching.');
+  if (appState.armed) {
+    // Requested inside the click: the lock needs a visible, active document,
+    // and a user gesture is the one moment that is guaranteed.
+    ScreenLock.acquire();
+    setStatus('watching for rule breaches');
+    Alarm.say('Now watching.');
+  } else {
+    ScreenLock.release();
+    setStatus('watching paused');
+  }
 });
 
 const ALERT_COOLDOWN_MS = 2000;
@@ -253,6 +319,15 @@ function showAlert(event) {
   return true;
 }
 
+// `zoned: false` entries are about the monitoring itself, not about a place on
+// the site, so naming a zone next to them would read as a false alarm.
+const LOG_KINDS = {
+  breach: { color: 'var(--red)', title: 'Breach', zoned: true },
+  warn: { color: 'var(--amber)', title: 'Warning', zoned: true },
+  gap: { color: 'var(--dim)', title: 'Not watching', zoned: false },
+  dark: { color: 'var(--blue)', title: 'Too dark', zoned: false },
+};
+
 function renderLog() {
   const logList = $('logList');
   if (!appState.events.length) {
@@ -260,14 +335,14 @@ function renderLog() {
     return;
   }
   logList.innerHTML = appState.events.map((event) => {
-    const isBreach = event.status === 'breach';
-    const color = isBreach ? 'var(--red)' : 'var(--amber)';
-    const title = isBreach ? 'Breach' : 'Warning';
+    const kind = LOG_KINDS[event.status] || LOG_KINDS.warn;
+    const color = kind.color;
+    const heading = kind.zoned ? `${kind.title} | ${event.rule?.zone || 'unknown'}` : kind.title;
     const time = new Date(event.ts || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
     return `<div class="inc">
       <div class="bar" style="background:${color}"></div>
       <div class="body">
-        <div class="t" style="color:${color}">${title} | ${event.rule?.zone || 'unknown'}</div>
+        <div class="t" style="color:${color}">${heading}</div>
         <div class="d">${event.say || event.rule?.say || 'Safety rule triggered'}</div>
         <div class="m">${time}</div>
       </div>
@@ -374,72 +449,12 @@ $('zoneCancelBtn').addEventListener('click', () => {
   setStatus('running');
 });
 
-const ruleInput = $('ruleInput');
-const ruleJsonPreview = $('ruleJsonPreview');
-ruleJsonPreview.addEventListener('click', () => {
-  clearTimeout(ruleJsonPreview._hide);
-  ruleJsonPreview.style.display = 'none';
-});
-
-function ensureZoneExists(name) {
-  if (ruleEngine.zones.has(name)) return;
-  const w = canvas.width * 0.3 || 200;
-  const h = canvas.height * 0.3 || 150;
-  ruleEngine.setZone(name, {
-    x: (canvas.width || 640) / 2 - w / 2,
-    y: (canvas.height || 480) / 2 - h / 2,
-    w,
-    h,
-  });
-}
-
-async function submitRuleText(text) {
-  if (!text || !text.trim()) return;
-  setStatus('compiling rule...');
-  try {
-    const { rules } = await LLM.compileRules(text.trim(), [...ruleEngine.zones.keys()]);
-    for (const rule of rules) {
-      ensureZoneExists(rule.zone);
-      ruleEngine.addRule(rule);
-    }
-    ruleJsonPreview.textContent = JSON.stringify({ rules }, null, 2);
-    ruleJsonPreview.style.display = 'block';
-    // It covers the camera, which is the thing we are demonstrating. Show it long
-    // enough to read and photograph, then get out of the way. Tap dismisses sooner.
-    clearTimeout(ruleJsonPreview._hide);
-    ruleJsonPreview._hide = setTimeout(() => { ruleJsonPreview.style.display = 'none'; }, 12000);
-    ruleInput.value = '';
-    setStatus('rule added');
-  } catch (err) {
-    setStatus('running');
-    showAlert({ status: 'breach', rule: { zone: 'rule compiler' }, say: `could not compile rule: ${err.message}` });
-  }
-}
-
-$('submitRuleBtn').addEventListener('click', () => submitRuleText(ruleInput.value));
-ruleInput.addEventListener('keydown', (evt) => {
-  if (evt.key === 'Enter') submitRuleText(ruleInput.value);
-});
-
-const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
-const speakRuleBtn = $('speakRuleBtn');
-if (SpeechRecognitionImpl) {
-  const recognition = new SpeechRecognitionImpl();
-  recognition.lang = 'en-US';
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  recognition.addEventListener('result', (evt) => {
-    const transcript = evt.results[0][0].transcript;
-    ruleInput.value = transcript;
-    submitRuleText(transcript);
-  });
-  recognition.addEventListener('error', (evt) => {
-    showAlert({ status: 'warn', rule: { zone: 'speech input' }, say: `mic error: ${evt.error}` });
-  });
-  speakRuleBtn.addEventListener('click', () => recognition.start());
-} else {
-  speakRuleBtn.disabled = true;
-  speakRuleBtn.title = 'Speech recognition is not supported in this browser. Type the rule instead.';
+// Rules are created by hand: drag a box on the camera, then fill in the zone form.
+// Speech output below is the browser's local text-to-speech and stays on-device.
+function speakWarning(text) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 }
 
 // Sound check only — deliberately does not touch the tally or the event log.
@@ -448,18 +463,6 @@ $('testAlarmBtn').addEventListener('click', () => {
   Alarm.fire('breach', 'Stop. Do not go there. This is a restricted area.');
   flash.className = 'alarm-flash on';
   setTimeout(() => { flash.className = 'alarm-flash'; }, 650);
-});
-
-$('testLlmBtn').addEventListener('click', async () => {
-  setStatus('asking the AI brain...');
-  try {
-    const { text } = await LLM.chat([{ role: 'user', content: 'Reply with exactly one word: ready' }]);
-    setStatus('running');
-    showAlert({ status: 'warn', rule: { zone: 'AI brain' }, say: `replied: "${text.trim()}"` });
-  } catch (err) {
-    setStatus('running');
-    showAlert({ status: 'breach', rule: { zone: 'AI brain' }, say: `not reachable: ${err.message}` });
-  }
 });
 
 function fitCanvas() {
@@ -568,13 +571,122 @@ function drawDemoBackdrop() {
   synthCtx.fillText('No live camera available', w * .18, h * .48);
 }
 
-async function detectLoop(model, tracker) {
+/* ---------- light meter ----------
+   A phone camera has no infrared. Past a certain darkness COCO-SSD simply stops
+   returning anything, and "no detections" is indistinguishable from "nobody is
+   there" — the app would sit looking calm and confident while seeing nothing.
+   Measuring the picture is the only way to tell those two apart.
+
+   One 32x24 downscale a second costs far less than a detection pass, and average
+   luma is enough to know whether any usable signal is left.
+
+   Two thresholds, not one: a single cutoff flickers on and off at dusk, or every
+   time someone walks past a lamp. It goes dark below DARK_ENTER, and is only
+   called usable again above the higher DARK_EXIT — and either verdict has to
+   hold for a few samples before it counts. */
+const LightMeter = (() => {
+  const SAMPLE_MS = 1000;
+  const DARK_ENTER = 42; // average luma, 0-255
+  const DARK_EXIT = 58;
+  const HOLD_SAMPLES = 3;
+
+  const pad = document.createElement('canvas');
+  pad.width = 32;
+  pad.height = 24;
+  const padCtx = pad.getContext('2d', { willReadFrequently: true });
+
+  let lastSampleAt = 0;
+  let agreeing = 0;
+  let level = null;
+
+  function read() {
+    padCtx.drawImage(video, 0, 0, pad.width, pad.height);
+    const { data } = padCtx.getImageData(0, 0, pad.width, pad.height);
+    let sum = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+    }
+    return sum / (data.length / 4);
+  }
+
+  // True only on the sample where the verdict actually flips.
+  function sample(now) {
+    if (now - lastSampleAt < SAMPLE_MS) return false;
+    if (!video.videoWidth) return false;
+    lastSampleAt = now;
+
+    try {
+      level = read();
+    } catch (err) {
+      return false; // frame not decodable yet
+    }
+
+    const votesDark = appState.dark ? level < DARK_EXIT : level < DARK_ENTER;
+    if (votesDark === appState.dark) {
+      agreeing = 0;
+      return false;
+    }
+
+    agreeing += 1;
+    if (agreeing < HOLD_SAMPLES) return false;
+    agreeing = 0;
+    appState.dark = votesDark;
+    return true;
+  }
+
+  return { sample, reading: () => level };
+})();
+
+let darkSince = 0;
+
+function onLightChange() {
+  const level = Math.round(LightMeter.reading());
+  if (appState.dark) {
+    darkSince = Date.now();
+    addEventToUi({
+      status: 'dark',
+      rule: { zone: 'monitoring' },
+      say: `Too dark to detect reliably (brightness ${level} of 255). Light this area.`,
+    });
+    setStatus('too dark to monitor reliably');
+    if (appState.armed) Alarm.fire('warn', 'Too dark to monitor. Add light.');
+    return;
+  }
+
+  const seconds = darkSince ? Math.round((Date.now() - darkSince) / 1000) : 0;
+  darkSince = 0;
+  addEventToUi({
+    status: 'gap',
+    rule: { zone: 'monitoring' },
+    say: seconds
+      ? `Light restored after ${formatGap(seconds)} of unreliable cover.`
+      : 'Light restored.',
+  });
+  setStatus('light restored — watching');
+}
+
+// Android can freeze a hidden page hard enough that the rAF chain is never
+// resumed, which leaves an app that looks armed and is running nothing. The
+// generation counter lets the watchdog start a fresh loop and have any stale
+// one retire itself rather than both running at once.
+let visionModel = null;
+let visionTracker = null;
+let loopGen = 0;
+let lastFrameAt = 0;
+
+async function detectLoop(model, tracker, gen) {
+  if (gen !== loopGen) return; // a newer loop has taken over
+  lastFrameAt = performance.now();
   const start = performance.now();
   const detections = await model.detect(video);
   const tracks = tracker.update(detections, performance.now());
   appState.latency = Math.round(performance.now() - start);
   appState.people = tracks.filter((t) => t.class === 'person').length;
   drawTracks(tracks);
+
+  // Detection keeps running in the dark — a track found down there is still a
+  // real track. What changes is the claim we are willing to make about cover.
+  if (appState.source === 'camera' && LightMeter.sample(start)) onLightChange();
 
   if (appState.armed) {
     const events = ruleEngine.evaluate(tracks);
@@ -588,8 +700,49 @@ async function detectLoop(model, tracker) {
   }
 
   paintStats();
-  requestAnimationFrame(() => detectLoop(model, tracker));
+  requestAnimationFrame(() => detectLoop(model, tracker, gen));
 }
+
+function formatGap(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${mins}m ${rest}s` : `${mins}m`;
+}
+
+let hiddenSince = 0;
+
+/* A hidden page is a frozen detection loop, so time spent hidden is time we
+   were not watching. Resume, but say so: the log must never imply cover we
+   did not have. Same fail-loud reasoning as blurring the whole frame. */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (appState.armed && !hiddenSince) hiddenSince = Date.now();
+    return;
+  }
+
+  // Back in front, and the browser dropped the lock on the way out.
+  if (appState.armed) ScreenLock.acquire();
+
+  if (hiddenSince) {
+    const seconds = Math.round((Date.now() - hiddenSince) / 1000);
+    hiddenSince = 0;
+    // Under two seconds is a tab flick, not a gap in cover.
+    if (seconds >= 2) {
+      addEventToUi({
+        status: 'gap',
+        rule: { zone: 'monitoring' },
+        say: `Stopped for ${formatGap(seconds)} — the screen was off or the app was in the background.`,
+      });
+      setStatus(`resumed after a ${formatGap(seconds)} gap`);
+    }
+  }
+
+  if (visionModel && performance.now() - lastFrameAt > 2000) {
+    loopGen += 1;
+    detectLoop(visionModel, visionTracker, loopGen);
+  }
+});
 
 async function logSafetyEvent(event) {
   const record = { status: event.status, rule: event.rule };
@@ -621,9 +774,11 @@ async function main() {
     setStatus('loading vision model...');
     const model = await SafetyEyeVision.loadVisionModel();
     const tracker = new SafetyEyeVision.Tracker();
+    visionModel = model;
+    visionTracker = tracker;
     loading.classList.add('hide');
     setStatus('ready');
-    detectLoop(model, tracker);
+    detectLoop(model, tracker, loopGen);
   } catch (err) {
     appState.source = 'demo';
     fitCanvas();

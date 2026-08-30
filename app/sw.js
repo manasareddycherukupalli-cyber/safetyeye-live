@@ -1,10 +1,7 @@
 // sw.js — makes the app survive the network dying, which it will.
 //
-// Two rules, and the second one matters more than it looks:
-//   1. Everything static is served from the cache first. Once installed, the app
-//      opens in aeroplane mode with no network at all.
-//   2. Model calls are NEVER cached. /v1/*, /completion and /health go straight to
-//      llama-server. A cached model reply would be a demo that lies.
+// Everything static is served from the cache. Once installed, the app opens in
+// aeroplane mode with no network at all.
 
 const CACHE = 'safetyeye-v3';
 
@@ -16,11 +13,9 @@ const SHELL = [
   './rules.js',
   './report.js',
   './log.js',
-  './llm.js',
   './mesh.js',
   './supervisor.html',
   './supervisor.js',
-  './llm-test.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
@@ -62,23 +57,17 @@ self.addEventListener('activate', event => {
   })());
 });
 
-const isModelCall = url =>
-  url.pathname.startsWith('/v1/') ||
-  url.pathname === '/completion' ||
-  url.pathname === '/health' ||
-  url.pathname === '/props';
-
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  if (event.request.method !== 'GET' || isModelCall(url) || url.origin !== location.origin) {
+  if (event.request.method !== 'GET' || url.origin !== location.origin) {
     return; // straight to the network, untouched
   }
 
   // Network-first, cache as fallback.
   //
-  // The "network" here is llama-server on 127.0.0.1 — same device, always fast, so
-  // going to it first costs nothing and guarantees a `git pull` is actually visible
+  // The "network" here is the static server on 127.0.0.1 — same device, always fast,
+  // so going to it first costs nothing and guarantees a `git pull` is actually visible
   // on the next reload. Cache-first cost us an afternoon of debugging stale code.
   //
   // The cache is still fully populated, so aeroplane mode works exactly as before:

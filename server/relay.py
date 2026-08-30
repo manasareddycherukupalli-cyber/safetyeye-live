@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """relay.py — the only thing that crosses the network between phones.
 
-Every phone runs its own complete stack: camera, COCO-SSD, tracker, rules,
-llama-server. They do not share vision and they do not share video. Video
+Every phone runs its own complete stack: camera, COCO-SSD, tracker, rules.
+They do not share vision and they do not share video. Video
 cannot cross the network here even if we wanted it to — getUserMedia is
 refused on any non-localhost origin, so the camera must stay on the device
 that renders it (CLAUDE.md, "Mesh").
@@ -99,8 +99,8 @@ def _clean(raw):
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
-    # The supervisor page is served from llama-server on 127.0.0.1:8080 while the
-    # relay lives on a LAN address, so this is genuinely cross-origin and needs
+    # The supervisor page is served from 127.0.0.1:8080 while the relay lives
+    # on a LAN address, so this is genuinely cross-origin and needs
     # the headers. It is a LAN postbox for a two-phone demo, not a public service.
     def _send(self, code, payload):
         body = json.dumps(payload).encode()

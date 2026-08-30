@@ -355,7 +355,7 @@
           <div class="route">incidents<small>what went wrong</small></div>
           <div class="route">reports<small>summaries</small></div>
           <div class="route">port 8090<small>Express lives here</small></div>
-          <div class="route">port 8080<small>Qwen stays here</small></div>
+          <div class="route">port 8080<small>the app is served here</small></div>
         </div>
       </div>
     </section>
@@ -363,7 +363,7 @@
     <section class="section">
       <div>
         <h2>Two jobs stay separate.</h2>
-        <p>Express handles normal app data. Qwen handles local AI thinking.</p>
+        <p>Express handles normal app data. The static server just hands out the app.</p>
       </div>
       <div class="scene">
         <div class="stack">
@@ -379,7 +379,7 @@
               <circle cx="50" cy="50" r="32" fill="#f0b429"/>
               <path d="M35 55c8 9 22 9 30 0M36 39h1M63 39h1" stroke="#17201c" stroke-width="8" stroke-linecap="round"/>
             </svg>
-            <div><strong>llama-server: 8080</strong><span>local Qwen AI inference</span></div>
+            <div><strong>static server: 8080</strong><span>serves the app on the phone</span></div>
           </div>
         </div>
       </div>

@@ -52,7 +52,7 @@ assert(fresh.snapshot === 'data:new', 'snapshot rejoined from frames store');
 assert(fresh.hasFrame === true, 'hasFrame set on breach with a frame');
 
 const noFrames = await Log.getEvents({ withFrames: false });
-assert(noFrames.every((e) => e.snapshot === undefined), 'withFrames:false keeps base64 out of LLM prompts');
+assert(noFrames.every((e) => e.snapshot === undefined), 'withFrames:false keeps base64 out of the returned events');
 
 const session = await Log.getSessionEvents();
 assert(session.length === 3 && !session.some((e) => e.session === 'pre-v2'), 'getSessionEvents excludes the old shift');

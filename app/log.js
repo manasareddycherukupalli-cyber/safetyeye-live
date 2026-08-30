@@ -138,9 +138,9 @@ const SafetyEyeLog = (() => {
   }
 
   // withFrames defaults to true so the report keeps reading `event.snapshot`
-  // exactly as it did under v1. Pass false for the LLM paths (askLog,
-  // writeReport) — a base64 image in a prompt is thousands of wasted tokens at
-  // 15 tok/s.
+  // exactly as it did under v1. Pass false wherever only the event metadata is
+  // wanted — the mesh publish path, for one, where a base64 image has no business
+  // crossing the wire.
   async function getEvents({ withFrames = true, session = null, since = null } = {}) {
     const db = await openDb();
     const tx = db.transaction([EVENTS, FRAMES], 'readonly');
