@@ -15,8 +15,50 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<!-- Both of these used to come from a CDN, which meant the app could not start in
+     aeroplane mode — the whole premise of the demo — and quietly fell back to the
+     simulated scene instead. They ship inside the APK now. Nothing is fetched. -->
+<script>
+/* TensorFlow.js fetches the model weights. Chromium will not fetch() a file: URL —
+   it is a hard refusal, not a permission — so shipping the model inside the app
+   was not enough on its own: it loaded from the CDN or not at all, and aeroplane
+   mode fell back to the demo scene. XMLHttpRequest can read file: when the
+   WebView allows it, so file: requests are routed there and handed back as
+   something close enough to a Response for tfjs. Every other URL is untouched. */
+(function () {
+  var real = window.fetch ? window.fetch.bind(window) : null;
+  window.fetch = function (input, init) {
+    var url = String(input && input.url ? input.url : input);
+    // Resolve first. tfjs asks for "vendor/coco-ssd/model.json" relative to the
+    // page; testing the raw string let every relative request fall through to the
+    // real fetch, which resolved it against file: and refused it there instead.
+    try { url = new URL(url, document.baseURI).href; } catch (e) {}
+    if (url.indexOf("file://") !== 0)
+      return real ? real(input, init) : Promise.reject(new Error("no fetch"));
+    return new Promise(function (resolve, reject) {
+      var x = new XMLHttpRequest();
+      x.open("GET", url, true);
+      x.responseType = "arraybuffer";
+      x.onload = function () {
+        var buf = x.response || new ArrayBuffer(0);
+        var decode = function () { return new TextDecoder("utf-8").decode(buf); };
+        resolve({
+          ok: true, status: 200, statusText: "OK", url: url,
+          headers: { get: function () { return null; } },
+          arrayBuffer: function () { return Promise.resolve(buf); },
+          text: function () { return Promise.resolve(decode()); },
+          json: function () { return Promise.resolve(JSON.parse(decode())); },
+          clone: function () { return this; },
+        });
+      };
+      x.onerror = function () { reject(new TypeError("could not read " + url)); };
+      x.send();
+    });
+  };
+})();
+</script>
+<script src="vendor/tf.min.js"></script>
+<script src="vendor/coco-ssd.min.js"></script>
 
 <style>
 :root{
@@ -1287,7 +1329,10 @@ const App = (() => {
     try{ if(!localStorage.getItem("se_onb")) $("onb").classList.add("show"); }
     catch(e){ $("onb").classList.add("show"); }
     try{
-      S.model=await cocoSsd.load({base:"lite_mobilenet_v2"});
+      // modelUrl matters as much as the script tag: without it the library goes to
+      // Google's servers for the weights and the offline claim is still untrue.
+      S.model=await cocoSsd.load({base:"lite_mobilenet_v2",
+                                  modelUrl:"vendor/coco-ssd/model.json"});
       S.ready=true;
       $("loadTitle").textContent="Turning the camera on";
       $("loadSub").textContent="The picture is read here on the phone and never sent anywhere.";

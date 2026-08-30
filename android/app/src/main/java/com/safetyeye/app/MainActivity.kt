@@ -74,6 +74,12 @@ class MainActivity : Activity() {
             settings.mediaPlaybackRequiresUserGesture = false
             settings.cacheMode = WebSettings.LOAD_DEFAULT
             settings.allowFileAccess = true
+            // Chromium's fetch() refuses the file: scheme outright, and that is how
+            // TensorFlow.js reads the model weights — so with the model shipped inside
+            // the app it failed to load and the page fell back to the demo scene. XHR
+            // can read file: when this is on, and the page shims fetch onto it.
+            settings.allowFileAccessFromFileURLs = true
+            settings.allowUniversalAccessFromFileURLs = true
             settings.allowContentAccess = true
             settings.loadWithOverviewMode = false
             settings.useWideViewPort = false
