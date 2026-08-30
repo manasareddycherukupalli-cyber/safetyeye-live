@@ -59,6 +59,7 @@
 </script>
 <script src="vendor/tf.min.js"></script>
 <script src="vendor/coco-ssd.min.js"></script>
+<script src="yolo.js"></script>
 
 <style>
 :root{
@@ -828,6 +829,17 @@ body.android-app .tile .n{overflow-wrap:anywhere}
             </div>
           </div>
 
+          <div class="card">
+            <div class="card-h" style="margin-bottom:0">
+              <div>
+                <h3>Sharper eyes (YOLOv8)</h3>
+                <div class="hint-x" style="margin-top:3px">Better in crowds and with half-hidden
+                  people. Restart watching after changing this.</div>
+              </div>
+              <div class="switch" id="yoloSw" onclick="App.toggleDetector()"></div>
+            </div>
+          </div>
+
           <div class="privacy">
             <div class="r">
               <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
@@ -1024,6 +1036,11 @@ const App = (() => {
     tab:"home", armed:false, source:"camera", model:null, ready:false, drawMode:null,
     zones:{restricted:null, exit:null},
     limit:3, sound:true, speak:true, anonymise:true, online:navigator.onLine,
+    // "coco" is the default on purpose: it is the detector the demo was rehearsed
+    // against. "yolo" is newer and sharper on crowds and part-hidden people, and
+    // falls back to coco if it will not load, so choosing it can never leave the
+    // app with no detector at all.
+    detector:"coco",
     cameraFacing:"environment",
     siteName:"Tower B — Level 4", siteSub:"Sector 12 Construction · Shift 2 of 3",
     incidents:[], people:0, ms:0,
@@ -1082,7 +1099,7 @@ const App = (() => {
       try{
         localStorage.setItem(SAVE_KEY, JSON.stringify({
           zones:S.zones, limit:S.limit, sound:S.sound, speak:S.speak,
-          anonymise:S.anonymise, watchedMs:watched(), firstAt:S.firstAt,
+          anonymise:S.anonymise, detector:S.detector, watchedMs:watched(), firstAt:S.firstAt,
           siteName:S.siteName, siteSub:S.siteSub,
           incidents:S.incidents.slice(0,MAX_KEEP), day:new Date().toDateString()
         }));
@@ -1109,6 +1126,7 @@ const App = (() => {
       S.sound=d.sound??S.sound;
       S.speak=d.speak??S.speak;
       S.anonymise=d.anonymise??S.anonymise;
+      S.detector=d.detector||S.detector;
       S.watchedMs=d.watchedMs||0;
       S.firstAt=d.firstAt||null;
       if(d.siteName!=null) S.siteName=d.siteName;
@@ -1318,12 +1336,24 @@ const App = (() => {
     });
   }
 
+  // One question, two possible answers to it. The rest of the app asks
+  // model.detect(video, n, score) and never learns which of these replied.
+  async function loadDetector(which){
+    if(which==="yolo" && window.SafetyEyeYolo){
+      try{ return await SafetyEyeYolo.load("vendor/yolov8n/model.json"); }
+      catch(e){ console.log("yolo failed, falling back to coco-ssd: "+e); }
+    }
+    return cocoSsd.load({base:"lite_mobilenet_v2",
+                         modelUrl:"vendor/coco-ssd/model.json"});
+  }
+
   async function boot(){
     load();
     bindSiteFields();
     $("limitVal").textContent=S.limit;
     $("soundSw").classList.toggle("on",S.sound);
     $("speakSw").classList.toggle("on",S.speak);
+    $("yoloSw").classList.toggle("on",S.detector==="yolo");
     $("anonSw").classList.toggle("on",S.anonymise);
     fitCanvas(); renderLog(); renderDoc();
     try{ if(!localStorage.getItem("se_onb")) $("onb").classList.add("show"); }
@@ -1331,8 +1361,7 @@ const App = (() => {
     try{
       // modelUrl matters as much as the script tag: without it the library goes to
       // Google's servers for the weights and the offline claim is still untrue.
-      S.model=await cocoSsd.load({base:"lite_mobilenet_v2",
-                                  modelUrl:"vendor/coco-ssd/model.json"});
+      S.model=await loadDetector(S.detector);
       S.ready=true;
       $("loadTitle").textContent="Turning the camera on";
       $("loadSub").textContent="The picture is read here on the phone and never sent anywhere.";
@@ -2163,6 +2192,27 @@ const App = (() => {
   function toggleSound(){S.sound=!S.sound;$("soundSw").classList.toggle("on",S.sound);save()}
   function toggleSpeak(){
     S.speak=!S.speak;$("speakSw").classList.toggle("on",S.speak);save();
+  }
+  // Swaps the detector without a restart. If the new one will not load, loadDetector
+  // returns the old one rather than nothing, and the switch is put back to match —
+  // the app is never left unable to see.
+  async function toggleDetector(){
+    const want=S.detector==="yolo"?"coco":"yolo";
+    $("yoloSw").classList.toggle("on",want==="yolo");
+    toast(want==="yolo"?"Loading sharper eyes…":"Switching back…","One moment",true);
+    try{
+      const m=await loadDetector(want);
+      S.model=m; S.detector=(m.backend==="yolo")?"yolo":"coco";
+      tracks=[];
+      $("yoloSw").classList.toggle("on",S.detector==="yolo");
+      save();
+      toast(S.detector==="yolo"?"YOLOv8 running":"COCO-SSD running",
+            S.detector===want?"Detector swapped on the phone":"That model would not load",
+            S.detector===want);
+    }catch(e){
+      $("yoloSw").classList.toggle("on",S.detector==="yolo");
+      toast("Could not switch","Staying on the detector that works",false);
+    }
     if(S.speak) say("Spoken warnings are on.");
     else stopSpeech();
   }
@@ -2188,7 +2238,7 @@ const App = (() => {
   netSync(false);onbShow(0);renderDoc();boot();
 
   return {go,draw,setRule,clearZones,toggleArm,flipCamera,toggleSource,limit,
-          toggleSound,toggleSpeak,toggleAnon,exportDoc,exportCsv,
+          toggleSound,toggleSpeak,toggleDetector,toggleAnon,exportDoc,exportCsv,
           onbNext,onbOpen,onbClose,clearLog};
 })();
 </script>

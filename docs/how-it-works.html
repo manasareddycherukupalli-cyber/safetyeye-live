@@ -1,0 +1,387 @@
+<title>How SafetyEye Works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;500;600&display=swap">
+<style>
+/* ---------------------------------------------------------------------------
+   Eight pictures, eight sentences. Somebody who has never heard the word
+   "model" should be able to read this at arm's length and come away able to
+   explain it to the next person.
+
+   Light ground on purpose — the app and the pitch deck are dark, and this is
+   the piece you hand someone rather than present at them.
+--------------------------------------------------------------------------- */
+:root{
+  --ground:#EDF1F3;      /* cool grey, biased toward the accent, not warm cream */
+  --paper:#FFFFFF;
+  --ink:#0E1A22;
+  --muted:#5A6C79;
+  --faint:#95A5AF;
+  --rule:#D5DDE2;
+  --accent:#00996E;      /* the app's mint, taken down until it works on white */
+  --accent-soft:#DCF2EA;
+  --danger:#D93F38;
+  --danger-soft:#FBE4E3;
+  --warn:#C97A00;
+  --shadow:0 1px 2px rgba(14,26,34,.06), 0 12px 28px -18px rgba(14,26,34,.35);
+  --display:"Archivo Black","Arial Black",system-ui,sans-serif;
+  --body:"Archivo",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0B1118; --paper:#131C24; --ink:#E9F0F4; --muted:#93A6B3;
+    --faint:#63767F; --rule:#22303A; --accent:#25E5A8; --accent-soft:#0C2B23;
+    --danger:#FF6A62; --danger-soft:#2E1514; --warn:#F0A63A;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 14px 34px -20px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0B1118; --paper:#131C24; --ink:#E9F0F4; --muted:#93A6B3;
+  --faint:#63767F; --rule:#22303A; --accent:#25E5A8; --accent-soft:#0C2B23;
+  --danger:#FF6A62; --danger-soft:#2E1514; --warn:#F0A63A;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 14px 34px -20px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--ground);color:var(--ink);
+  font-family:var(--body);font-size:17px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:clamp(28px,6vw,80px) clamp(18px,5vw,40px)}
+
+/* ---- opening ------------------------------------------------------------- */
+header{display:flex;flex-direction:column;gap:18px;margin-bottom:clamp(40px,8vw,86px)}
+.kicker{
+  font-family:var(--body);font-size:12px;font-weight:600;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--accent);
+}
+h1{
+  font-family:var(--display);font-weight:400;margin:0;
+  font-size:clamp(38px,8.5vw,84px);line-height:.98;letter-spacing:-.02em;
+  text-wrap:balance;
+}
+.stand{
+  margin:0;font-size:clamp(17px,2.4vw,23px);line-height:1.5;color:var(--muted);
+  max-width:34ch;text-wrap:pretty;
+}
+
+/* ---- the eight steps ----------------------------------------------------- */
+.steps{display:flex;flex-direction:column;gap:clamp(20px,4vw,40px)}
+.step{
+  background:var(--paper);border:1px solid var(--rule);border-radius:20px;
+  box-shadow:var(--shadow);overflow:hidden;
+  display:grid;grid-template-columns:1fr;
+}
+@media (min-width:800px){
+  .step{grid-template-columns:1fr 1fr;align-items:center}
+  .step:nth-child(even) .art{order:2}
+}
+.art{background:var(--ground);padding:clamp(16px,3vw,28px);display:flex}
+.art svg{width:100%;height:auto;display:block}
+.say{padding:clamp(22px,4vw,42px);display:flex;flex-direction:column;gap:12px}
+.n{
+  font-family:var(--display);font-size:13px;color:var(--accent);
+  letter-spacing:.06em;
+}
+.say h2{
+  font-family:var(--display);font-weight:400;margin:0;
+  font-size:clamp(24px,3.6vw,38px);line-height:1.06;letter-spacing:-.015em;
+  text-wrap:balance;
+}
+.say p{margin:0;color:var(--muted);font-size:clamp(15px,1.8vw,17.5px);max-width:42ch;text-wrap:pretty}
+.say p b{color:var(--ink);font-weight:600}
+
+/* ---- the closing line ---------------------------------------------------- */
+.punch{
+  margin-top:clamp(34px,7vw,74px);padding:clamp(26px,5vw,52px);
+  background:var(--ink);color:var(--ground);border-radius:20px;
+  display:flex;flex-direction:column;gap:14px;
+}
+.punch h2{
+  font-family:var(--display);font-weight:400;margin:0;
+  font-size:clamp(26px,5vw,52px);line-height:1.03;letter-spacing:-.02em;text-wrap:balance;
+}
+.punch p{margin:0;font-size:clamp(15px,2vw,19px);opacity:.72;max-width:46ch}
+
+/* ---- names table --------------------------------------------------------- */
+.names{margin-top:clamp(34px,7vw,74px)}
+.names h3{
+  font-family:var(--display);font-weight:400;margin:0 0 6px;
+  font-size:clamp(20px,3vw,30px);letter-spacing:-.015em;
+}
+.names > p{margin:0 0 20px;color:var(--muted);max-width:52ch}
+.tbl{overflow-x:auto;border:1px solid var(--rule);border-radius:16px;background:var(--paper)}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:15.5px}
+th,td{text-align:left;padding:13px 18px;border-bottom:1px solid var(--rule);vertical-align:top}
+tr:last-child td{border-bottom:0}
+th{
+  font-size:11.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint);
+}
+td.term{font-weight:600;white-space:nowrap;color:var(--ink)}
+td.plain{color:var(--muted)}
+footer{margin-top:clamp(30px,6vw,60px);color:var(--faint);font-size:14px}
+a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="kicker">SafetyEye &middot; how it actually works</span>
+  <h1>A phone that shouts before someone gets hurt.</h1>
+  <p class="stand">No jargon. Eight pictures. If you can follow this, you can
+    explain the whole thing to anyone.</p>
+</header>
+
+<div class="steps">
+
+  <!-- 1 ------------------------------------------------------------------ -->
+  <section class="step">
+    <div class="art">
+      <svg viewBox="0 0 400 260" role="img" aria-label="A phone on a stand pointing at a machine, with a worker nearby">
+        <rect x="0" y="0" width="400" height="260" fill="none"/>
+        <!-- floor -->
+        <line x1="20" y1="212" x2="380" y2="212" stroke="var(--rule)" stroke-width="3"/>
+        <!-- machine -->
+        <rect x="236" y="120" width="120" height="92" rx="8" fill="var(--danger-soft)" stroke="var(--danger)" stroke-width="3"/>
+        <rect x="258" y="140" width="76" height="26" rx="4" fill="var(--danger)" opacity=".55"/>
+        <path d="M296 166v30" stroke="var(--danger)" stroke-width="6" stroke-linecap="round"/>
+        <!-- worker -->
+        <circle cx="150" cy="140" r="17" fill="var(--muted)"/>
+        <path d="M150 160c-17 0-27 12-27 28v24h54v-24c0-16-10-28-27-28z" fill="var(--muted)"/>
+        <!-- tripod + phone -->
+        <path d="M56 212l14-46M84 212l-14-46" stroke="var(--ink)" stroke-width="5" stroke-linecap="round"/>
+        <rect x="50" y="86" width="42" height="82" rx="9" fill="var(--ink)"/>
+        <rect x="56" y="94" width="30" height="60" rx="4" fill="var(--accent)" opacity=".85"/>
+        <!-- field of view -->
+        <path d="M92 108L370 128M92 146L370 200" stroke="var(--accent)" stroke-width="2" stroke-dasharray="7 6" opacity=".7"/>
+      </svg>
+    </div>
+    <div class="say">
+      <span class="n">01</span>
+      <h2>Prop a phone facing the dangerous spot.</h2>
+      <p>That's the whole installation. No cameras on the ceiling, no wiring,
+        no computer in a cupboard. <b>One phone, pointed at the thing that can hurt someone.</b></p>
+    </div>
+  </section>
+
+  <!-- 2 ------------------------------------------------------------------ -->
+  <section class="step">
+    <div class="art">
+      <svg viewBox="0 0 400 260" role="img" aria-label="The phone drawing a box around a person it has spotted">
+        <line x1="20" y1="212" x2="380" y2="212" stroke="var(--rule)" stroke-width="3"/>
+        <rect x="128" y="70" width="112" height="142" rx="6" fill="none" stroke="var(--accent)" stroke-width="4"/>
+        <!-- corner ticks, the way the app draws them -->
+        <path d="M128 92V70h22M218 70h22v22M128 190v22h22M218 212h22v-22" stroke="var(--accent)" stroke-width="7" fill="none" stroke-linecap="square"/>
+        <rect x="128" y="46" width="96" height="20" rx="4" fill="var(--accent)"/>
+        <text x="136" y="61" font-family="ui-monospace,monospace" font-size="13" fill="var(--paper)">person 93%</text>
+        <circle cx="184" cy="112" r="19" fill="var(--muted)"/>
+        <path d="M184 136c-19 0-30 13-30 31v45h60v-45c0-18-11-31-30-31z" fill="var(--muted)"/>
+        <text x="290" y="120" font-family="ui-monospace,monospace" font-size="15" fill="var(--faint)">12&times;</text>
+        <text x="290" y="140" font-family="ui-monospace,monospace" font-size="15" fill="var(--faint)">a second</text>
+      </svg>
+    </div>
+    <div class="say">
+      <span class="n">02</span>
+      <h2>It notices people.</h2>
+      <p>Twelve times a second it looks at the picture and answers one question:
+        <b>is there a person, and where?</b> It draws a box around them. That's all
+        it knows &mdash; not who they are, not their face. Just: someone is there.</p>
+    </div>
+  </section>
+
+  <!-- 3 ------------------------------------------------------------------ -->
+  <section class="step">
+    <div class="art">
+      <svg viewBox="0 0 400 260" role="img" aria-label="Three fading boxes showing the same person moving across the frame">
+        <line x1="20" y1="212" x2="380" y2="212" stroke="var(--rule)" stroke-width="3"/>
+        <g fill="none" stroke="var(--accent)" stroke-width="4">
+          <rect x="40" y="96" width="72" height="116" rx="5" opacity=".28"/>
+          <rect x="130" y="96" width="72" height="116" rx="5" opacity=".55"/>
+          <rect x="220" y="96" width="72" height="116" rx="5"/>
+        </g>
+        <g fill="var(--muted)">
+          <circle cx="76" cy="124" r="12" opacity=".28"/><rect x="60" y="142" width="32" height="66" rx="12" opacity=".28"/>
+          <circle cx="166" cy="124" r="12" opacity=".55"/><rect x="150" y="142" width="32" height="66" rx="12" opacity=".55"/>
+          <circle cx="256" cy="124" r="12"/><rect x="240" y="142" width="32" height="66" rx="12"/>
+        </g>
+        <path d="M112 66h168" stroke="var(--ink)" stroke-width="3" stroke-dasharray="6 7"/>
+        <path d="M272 58l14 8-14 8z" fill="var(--ink)"/>
+        <text x="140" y="48" font-family="var(--body)" font-size="15" font-weight="600" fill="var(--ink)">same person</text>
+      </svg>
+    </div>
+    <div class="say">
+      <span class="n">03</span>
+      <h2>It remembers where you just were.</h2>
+      <p>A single picture can't tell you anything about movement. So it links each
+        box to the one before it and realises <b>that's the same person, a moment later.</b>
+        Now it knows the direction you're walking, and how fast.</p>
+    </div>
+  </section>
+
+  <!-- 4 ------------------------------------------------------------------ -->
+  <section class="step">
+    <div class="art">
+      <svg viewBox="0 0 400 260" role="img" aria-label="A dotted path projecting a walking person forward into a red danger zone">
+        <line x1="20" y1="212" x2="380" y2="212" stroke="var(--rule)" stroke-width="3"/>
+        <rect x="250" y="74" width="126" height="138" rx="8" fill="var(--danger-soft)" stroke="var(--danger)" stroke-width="4" stroke-dasharray="10 7"/>
+        <rect x="250" y="52" width="112" height="20" rx="4" fill="var(--danger)"/>
+        <text x="258" y="67" font-family="ui-monospace,monospace" font-size="12" fill="var(--paper)">DANGER ZONE</text>
+        <circle cx="90" cy="122" r="19" fill="var(--muted)"/>
+        <path d="M90 146c-19 0-30 13-30 31v35h60v-35c0-18-11-31-30-31z" fill="var(--muted)"/>
+        <path d="M126 158q64 -6 118 -8" stroke="var(--ink)" stroke-width="4" stroke-dasharray="3 10" stroke-linecap="round" fill="none"/>
+        <circle cx="252" cy="150" r="9" fill="none" stroke="var(--ink)" stroke-width="4" stroke-dasharray="4 5"/>
+        <g transform="translate(150,72)">
+          <circle cx="0" cy="0" r="21" fill="var(--paper)" stroke="var(--warn)" stroke-width="4"/>
+          <path d="M0-12v13l9 6" stroke="var(--warn)" stroke-width="4" fill="none" stroke-linecap="round"/>
+        </g>
+        <text x="178" y="80" font-family="var(--body)" font-size="16" font-weight="600" fill="var(--warn)">0.75 sec</text>
+      </svg>
+    </div>
+    <div class="say">
+      <span class="n">04</span>
+      <h2>It works out where you'll be next.</h2>
+      <p>Knowing your direction and speed, it asks: <b>where will this person be
+        three-quarters of a second from now?</b> Not where they are &mdash; where they're
+        about to be. This is the part nobody else does.</p>
+    </div>
+  </section>
+
+  <!-- 5 ------------------------------------------------------------------ -->
+  <section class="step">
+    <div class="art">
+      <svg viewBox="0 0 400 260" role="img" aria-label="The phone speaking a warning out loud">
+        <rect x="36" y="60" width="80" height="150" rx="14" fill="var(--ink)"/>
+        <rect x="46" y="72" width="60" height="112" rx="6" fill="var(--danger)" opacity=".85"/>
+        <g stroke="var(--warn)" stroke-width="6" fill="none" stroke-linecap="round">
+          <path d="M132 118q16 17 0 34"/>
+          <path d="M152 100q30 35 0 70"/>
+          <path d="M172 82q46 53 0 106"/>
+        </g>
+        <rect x="204" y="96" width="176" height="72" rx="14" fill="var(--paper)" stroke="var(--ink)" stroke-width="4"/>
+        <path d="M204 148l-18 22 30-8z" fill="var(--paper)" stroke="var(--ink)" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M206 148h28" stroke="var(--paper)" stroke-width="6"/>
+        <text x="224" y="126" font-family="var(--body)" font-size="18" font-weight="600" fill="var(--ink)">Restricted area.</text>
+        <text x="224" y="150" font-family="var(--body)" font-size="18" font-weight="600" fill="var(--ink)">Step back.</text>
+      </svg>
+    </div>
+    <div class="say">
+      <span class="n">05</span>
+      <h2>If that's inside the danger zone, it shouts.</h2>
+      <p>Out loud, in words, through the phone's speaker &mdash; <b>while there's still
+        time to stop.</b> Not a beep. A sentence, so the person knows what's wrong
+        without looking at anything.</p>
+    </div>
+  </section>
+
+  <!-- 6 ------------------------------------------------------------------ -->
+  <section class="step">
+    <div class="art">
+      <svg viewBox="0 0 400 260" role="img" aria-label="A log entry with a blurred photo and a timestamp">
+        <rect x="60" y="44" width="280" height="172" rx="14" fill="var(--paper)" stroke="var(--rule)" stroke-width="3"/>
+        <rect x="82" y="70" width="76" height="76" rx="8" fill="var(--muted)" opacity=".35"/>
+        <circle cx="120" cy="98" r="14" fill="var(--muted)" opacity=".55"/>
+        <rect x="104" y="116" width="32" height="30" rx="10" fill="var(--muted)" opacity=".55"/>
+        <rect x="176" y="72" width="140" height="13" rx="6" fill="var(--danger)"/>
+        <rect x="176" y="94" width="112" height="10" rx="5" fill="var(--rule)"/>
+        <rect x="176" y="112" width="126" height="10" rx="5" fill="var(--rule)"/>
+        <text x="176" y="146" font-family="ui-monospace,monospace" font-size="15" fill="var(--faint)">20:54:31</text>
+        <rect x="82" y="166" width="234" height="1" fill="var(--rule)"/>
+        <rect x="82" y="182" width="94" height="10" rx="5" fill="var(--rule)"/>
+      </svg>
+    </div>
+    <div class="say">
+      <span class="n">06</span>
+      <h2>If you walk in anyway, it writes it down.</h2>
+      <p>With the time and a photo of the moment. A warning that worked is logged
+        as <b>prevented</b>. A warning that didn't is logged as a breach. The
+        difference between those two numbers is the whole point.</p>
+    </div>
+  </section>
+
+  <!-- 7 ------------------------------------------------------------------ -->
+  <section class="step">
+    <div class="art">
+      <svg viewBox="0 0 400 260" role="img" aria-label="A finished shift report document">
+        <rect x="104" y="30" width="192" height="212" rx="10" fill="var(--paper)" stroke="var(--rule)" stroke-width="3"/>
+        <rect x="128" y="56" width="88" height="14" rx="7" fill="var(--accent)"/>
+        <rect x="128" y="84" width="144" height="9" rx="4" fill="var(--rule)"/>
+        <rect x="128" y="102" width="122" height="9" rx="4" fill="var(--rule)"/>
+        <rect x="128" y="128" width="52" height="46" rx="6" fill="var(--muted)" opacity=".3"/>
+        <rect x="190" y="128" width="52" height="46" rx="6" fill="var(--muted)" opacity=".3"/>
+        <rect x="128" y="190" width="144" height="9" rx="4" fill="var(--rule)"/>
+        <rect x="128" y="208" width="96" height="9" rx="4" fill="var(--rule)"/>
+        <g transform="translate(300,168)">
+          <circle cx="0" cy="0" r="28" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="3"/>
+          <path d="M-12 1l8 9 17-19" stroke="var(--accent)" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+      </svg>
+    </div>
+    <div class="say">
+      <span class="n">07</span>
+      <h2>At the end of the shift, it writes the report.</h2>
+      <p>One tap. A proper Word document with the photos inside it, <b>faces blurred</b>,
+        ready to send to the client or the insurer. Nobody types anything.</p>
+    </div>
+  </section>
+
+  <!-- 8 ------------------------------------------------------------------ -->
+  <section class="step">
+    <div class="art">
+      <svg viewBox="0 0 400 260" role="img" aria-label="A cloud, a server and a bill, all crossed out">
+        <g stroke="var(--faint)" stroke-width="4" fill="none">
+          <path d="M52 128a26 26 0 0126-26 34 34 0 0165-9 24 24 0 013 47H78a26 26 0 01-26-26z"/>
+          <rect x="176" y="96" width="66" height="62" rx="7"/>
+          <path d="M176 117h66M176 138h66"/>
+          <path d="M282 96h58a6 6 0 016 6v52a6 6 0 01-6 6h-58a6 6 0 01-6-6v-52a6 6 0 016-6z"/>
+          <path d="M292 116h38M292 134h24"/>
+        </g>
+        <g stroke="var(--danger)" stroke-width="7" stroke-linecap="round">
+          <path d="M50 158L152 92"/>
+          <path d="M172 162L248 92"/>
+          <path d="M272 162L348 92"/>
+        </g>
+        <text x="60" y="204" font-family="var(--body)" font-size="17" font-weight="600" fill="var(--ink)">no cloud</text>
+        <text x="174" y="204" font-family="var(--body)" font-size="17" font-weight="600" fill="var(--ink)">no server</text>
+        <text x="278" y="204" font-family="var(--body)" font-size="17" font-weight="600" fill="var(--ink)">no bill</text>
+      </svg>
+    </div>
+    <div class="say">
+      <span class="n">08</span>
+      <h2>And none of it leaves the phone.</h2>
+      <p>Every step above happens on the handset itself. <b>Switch the internet off
+        and nothing changes</b> &mdash; because nothing was using it. No video is uploaded,
+        no subscription, nothing to hack.</p>
+    </div>
+  </section>
+</div>
+
+<div class="punch">
+  <h2>A site with no network and no budget can run this today.</h2>
+  <p>That is the entire pitch. Everything above is just how.</p>
+</div>
+
+<section class="names">
+  <h3>If someone asks for the technical names</h3>
+  <p>Same eight steps, in the vocabulary an engineer would use. Say the plain
+    sentence first, then the term &mdash; it reads as knowing both.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>The plain thing</th><th>What it's called</th><th>What that means</th></tr></thead>
+      <tbody>
+        <tr><td class="term">Opening the camera</td><td class="term">getUserMedia</td><td class="plain">The standard way any app asks for a camera</td></tr>
+        <tr><td class="term">Noticing people</td><td class="term">COCO-SSD on TensorFlow.js</td><td class="plain">A free, published people-detector, running on the phone's own chip</td></tr>
+        <tr><td class="term">Same person as before</td><td class="term">IoU tracker</td><td class="plain">Matches boxes between frames by how much they overlap</td></tr>
+        <tr><td class="term">Where you'll be next</td><td class="term">0.75s trajectory projection</td><td class="plain">Direction and speed, extended forward 45 frames</td></tr>
+        <tr><td class="term">Shouting</td><td class="term">On-device text-to-speech</td><td class="plain">The phone's built-in voice &mdash; no internet</td></tr>
+        <tr><td class="term">The log book</td><td class="term">Browser local storage</td><td class="plain">Survives a lock, a reload, the app being closed</td></tr>
+        <tr><td class="term">The report</td><td class="term">.docx built in JavaScript</td><td class="plain">The Word file is assembled on the phone, photos and all</td></tr>
+        <tr><td class="term">The app itself</td><td class="term">Android WebView + Kotlin</td><td class="plain">315 lines of native shell around one HTML file</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>SafetyEye &middot; Team Fight Club &mdash; Surendra Avula, Manasa Reddy &middot; iQOO Hackathon 2026, Bengaluru</footer>
+</div>
