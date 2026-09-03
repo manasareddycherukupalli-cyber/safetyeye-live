@@ -8,6 +8,10 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.provider.MediaStore
 import android.speech.tts.TextToSpeech
 import android.util.Base64
@@ -86,6 +90,7 @@ class MainActivity : Activity() {
             settings.textZoom = 100
             addJavascriptInterface(FileBridge(), "SafetyEyeFiles")
             addJavascriptInterface(SpeechBridge(), "SafetyEyeVoice")
+            addJavascriptInterface(AlarmBridge(), "SafetyEyeAlarm")
         }
 
         startTts()
@@ -184,6 +189,47 @@ class MainActivity : Activity() {
         fun stop() {
             pendingSpeech = null
             tts?.stop()
+        }
+    }
+
+    private inner class AlarmBridge {
+        @JavascriptInterface
+        fun restricted(text: String) {
+            Log.d(TAG, "restricted alarm: $text")
+            runOnUiThread {
+                playAlarmPattern()
+                vibrateAlarm()
+                val line = text.ifBlank { "Don't go. It is restricted area." }
+                if (ttsReady) speakNow(line) else pendingSpeech = line
+            }
+        }
+    }
+
+    private fun playAlarmPattern() {
+        Thread {
+            val tone = ToneGenerator(AudioManager.STREAM_ALARM, 100)
+            try {
+                repeat(3) {
+                    tone.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 420)
+                    Thread.sleep(560)
+                }
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+            } finally {
+                tone.release()
+            }
+        }.start()
+    }
+
+    private fun vibrateAlarm() {
+        val vibrator = getSystemService(VIBRATOR_SERVICE) as? Vibrator ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(
+                VibrationEffect.createWaveform(longArrayOf(0, 220, 90, 220, 90, 420), -1),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(longArrayOf(0, 220, 90, 220, 90, 420), -1)
         }
     }
 

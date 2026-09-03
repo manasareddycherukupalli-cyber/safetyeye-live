@@ -1222,6 +1222,10 @@ const App = (() => {
     try{ return (window.SafetyEyeVoice && typeof SafetyEyeVoice.speak==="function") ? SafetyEyeVoice : null; }
     catch(e){ return null; }
   })();
+  const nativeAlarm = (()=>{
+    try{ return (window.SafetyEyeAlarm && typeof SafetyEyeAlarm.restricted==="function") ? SafetyEyeAlarm : null; }
+    catch(e){ return null; }
+  })();
   function stopSpeech(){
     try{ if(nativeVoice) nativeVoice.stop(); }catch(e){}
     try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){}
@@ -1245,6 +1249,9 @@ const App = (() => {
   // spoken warning behind it — a siren that runs a full second only masks it.
   function alarm(){
     if(!S.sound) return;
+    if(nativeAlarm){
+      try{ nativeAlarm.restricted("Don't go. It is restricted area."); return; }catch(e){}
+    }
     [980,1180,1420].forEach((f,i)=>setTimeout(()=>beep(f),i*160));
   }
 
@@ -1625,7 +1632,7 @@ const App = (() => {
     setTimeout(()=>{f.classList.remove("on");setTimeout(()=>f.classList.remove("warn"),260)},600);
     alarm();
     buzz([140,70,140,70,220]);
-    say(WARN.say,450);                    // chirp first, words straight after it
+    if(!nativeAlarm) say("Don't go. It is restricted area.",450);
     toast("Restricted area","You are not allowed past this line",true);
     renderLog(); paintStats(); save();
   }
@@ -1643,9 +1650,11 @@ const App = (() => {
     S.alarmUntil=Date.now()+1300;
     $("flash").classList.add("on");
     setTimeout(()=>$("flash").classList.remove("on"),700);
-    beep(type==="intrusion"?920:type==="crowding"?700:540);
+    if(type==="intrusion") alarm();
+    else beep(type==="crowding"?700:540);
     buzz([160,70,160]);
-    say(RULES[type].say);
+    if(type==="intrusion" && !nativeAlarm) say("Don't go. It is restricted area.");
+    else if(type!=="intrusion") say(RULES[type].say);
     toast(RULES[type].label,`${detail} · ${stamp(d)}`);
     renderLog(); paintStats(); save();
   }
